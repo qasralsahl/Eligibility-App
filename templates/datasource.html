@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="content-section active">
+    <h2 class="mb-4">Data Source Management</h2>
+    <p class="text-muted">Upload patient appointment data or configure API integrations.</p>
+
+    <!-- Excel Upload Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Excel Upload</h5>
+        </div>
+        <div class="card-body">
+            {% if error %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                {{ error }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endif %}
+            
+            {% if message %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endif %}
+
+            {% if error_details %}
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <h6 class="alert-heading">Processing Errors:</h6>
+                <ul class="mb-0">
+                    {% for error in error_details %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endif %}
+
+            <form method="post" action="/upload" enctype="multipart/form-data" id="uploadForm">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Select Client *</label>
+                        <select class="form-select" name="client_id" id="clientSelect" required>
+                            <option value="">Select Client</option>
+                            {% for client in clients %}
+                            <option value="{{ client[0] }}">{{ client[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Select Excel file *</label>
+                        <div class="input-group">
+                            <input type="file" class="form-control" name="file" id="fileInput" 
+                                   accept=".xlsx,.xls" required style="display: none;">
+                            <button type="button" class="btn btn-outline-secondary" id="fileButton">Choose File</button>
+                            <span class="input-group-text" id="fileName">No file chosen</span>
+                        </div>
+                        <div class="form-text">Supported formats: xlsx, xls (Max: 10MB)</div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mb-4">
+                    <h6 class="alert-heading">Required Excel Columns</h6>
+                    <ul class="mb-0">
+                        <li><strong>PatientID</strong> - Unique patient identifier</li>
+                        <li><strong>AppointmentDate</strong> - YYYY-MM-DD format</li>
+                        <li><strong>InsuranceCode</strong> - Provider code</li>
+                        <li><strong>ClinicDoctorId</strong> - Doctor identifier</li>
+                        <li><strong>ClinicDoctorName</strong> - Doctor's full name</li>
+                        <li><strong>ClinicDoctorLicense</strong> - Doctor's license number</li>
+                        <li><strong>EmiratesId</strong> - Patient's Emirates ID</li>
+                        <li><strong>MobileCountryCode</strong> - Country code for mobile</li>
+                        <li><strong>MobileNumber</strong> - Patient's mobile number</li>
+                        <li><strong>PatientFirstName</strong> - Patient's first name</li>
+                        <li><strong>PatientLastName</strong> - Patient's last name</li>
+                        <li><strong>ClinicLicense</strong> - Clinic license number</li>
+                        <li><strong>DepartmentName</strong> - Medical department</li>
+                        <li><strong>SpecialityName</strong> - Medical specialty</li>
+                    </ul>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload me-1"></i> Upload & Process
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Recent Patient Data -->
+    <div class="card">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Recent Patient Data</h5>
+        </div>
+        <div class="card-body">
+            {% if patient_data and patient_data|length > 0 %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Patient ID</th>
+                            <th>Appointment Date</th>
+                            <th>Insurance</th>
+                            <th>Client</th>
+                            <th>Status</th>
+                            <th>Reference No</th>
+                            <th>Uploaded Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for patient in patient_data %}
+                        <tr>
+                            <td>{{ patient[0] }}</td>
+                            <td>{{ patient[1].strftime('%Y-%m-%d') if patient[1] else 'N/A' }}</td>
+                            <td>{{ patient[2] }}</td>
+                            <td>{{ patient[3] }}</td>
+                            <td>
+                                <span class="badge {% if patient[4] == 'Eligible' %}bg-success{% elif patient[4] == 'Pending' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                    {{ patient[4] }}
+                                </span>
+                            </td>
+                            <td>{{ patient[5] or 'N/A' }}</td>
+                            <td>{{ patient[6].strftime('%Y-%m-%d %H:%M') if patient[6] else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="fas fa-file-excel fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No patient data uploaded yet. Upload your first Excel file to get started.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Custom file input handling
+    const fileInput = document.getElementById('fileInput');
+    const fileButton = document.getElementById('fileButton');
+    const fileName = document.getElementById('fileName');
+    
+    if (fileButton && fileInput && fileName) {
+        fileButton.addEventListener('click', function() {
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', function() {
+            if (this.files && this.files.length > 0) {
+                fileName.textContent = this.files[0].name;
+            } else {
+                fileName.textContent = 'No file chosen';
+            }
+        });
+    }
+    
+    // Form submission handling
+    const uploadForm = document.getElementById('uploadForm');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', function(e) {
+            // Basic validation before submission
+            const clientSelect = document.getElementById('clientSelect');
+            const fileInput = document.getElementById('fileInput');
+            
+            if (!clientSelect.value) {
+                e.preventDefault();
+                alert('Please select a client.');
+                return false;
+            }
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                e.preventDefault();
+                alert('Please select an Excel file to upload.');
+                return false;
+            }
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

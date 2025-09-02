@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="content-section active">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Insurance Management</h2>
+        <a href="/insurance/create" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i> Add New Insurance
+        </a>
+    </div>
+
+    {# Show error messages if any #}
+    {% if request.query_params.get('error') %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ request.query_params.get('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Insurance Providers</span>
+
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="insuranceTable">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Registration Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for insurance in insurances %}
+                        <tr>
+                            <td>{{ insurance[1] }}</td>
+                            <td>{{ insurance[2] }}</td>
+                            <td>
+                                <span class="badge {% if insurance[3] %}bg-success{% else %}bg-danger{% endif %} status-badge">
+                                    {{ 'Active' if insurance[3] else 'Inactive' }}
+                                </span>
+                            </td>
+                            <td>{{ insurance[4].strftime('%Y-%m-%d') if insurance[4] else 'N/A' }}</td>
+                            <td>
+                                <a href="/insurance/edit/{{ insurance[0] }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form action="/insurance/delete/{{ insurance[0] }}" method="post" style="display: inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this insurance?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

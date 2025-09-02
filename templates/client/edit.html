@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="content-section active">
+    <h2 class="mb-4">Edit Client</h2>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Client Details</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" action="/client/edit/{{ client[0] }}">
+                <div class="row">
+                
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Client Name</label>
+                            <input type="text" class="form-control" name="ClientName" value="{{ client[1] }}" required>
+                        </div>
+                    </div>
+                </div>
+
+                   <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="IsActive" id="editClientActive" {% if client[2] %}checked{% endif %}>
+                        <label class="form-check-label" for="editClientActive">Active</label>
+                    </div>
+                </div>
+                
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Update Client</button>
+                    <a href="/client/list" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

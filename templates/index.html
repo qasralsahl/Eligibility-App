@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="content-section active">
+    <h2 class="mb-4">Eligibility Checker</h2>
+    
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Upload Excel File</h5>
+        </div>
+        <div class="card-body">
+            {% if message %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endif %}
+            
+            <form method="post" action="/" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label class="form-label">Select Excel File</label>
+                    <input class="form-control" type="file" name="file" accept=".xlsx,.xls" required>
+                    <div class="form-text">File must be in Excel format (xlsx, xls).</div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-upload me-1"></i> Upload & Process
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    {% if records %}
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Processed Records</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="processedRecordsTable">
+                    <thead>
+                        <tr>
+                            <th>Request ID</th>
+                            <th>Patient</th>
+                            <th>Insurance</th>
+                            <th>Client</th>
+                            <th>Reference No</th>
+                            <th>Status</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in records %}
+                        <tr>
+                            <td>{{ record.EligibilityRequestID }}</td>
+                            <td>{{ record.Patient }}</td>
+                            <td>{{ record.Insurance }}</td>
+                            <td>{{ record.Client }}</td>
+                            <td>{{ record.Reference_No }}</td>
+                            <td>
+                                <span class="badge {% if record.Is_Eligible == 'Yes' %}bg-success{% else %}bg-danger{% endif %} status-badge">
+                                    {{ record.Is_Eligible }}
+                                </span>
+                            </td>
+                            <td>{{ record.Notes }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

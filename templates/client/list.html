@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="content-section active">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Client Management</h2>
+        <a href="/client/create" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i> Add New Client
+        </a>
+    </div>
+
+    {# Optional: Show error messages if passed via query params #}
+    {% if request.query_params.get('error') %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ request.query_params.get('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Registered Clients</span>
+            <!-- <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" class="form-control form-control-sm" placeholder="Search clients...">
+            </div> -->
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="clientTable">
+                    <thead>
+                        <tr>
+                            <th>Client ID</th>
+                            <th>Name</th>
+                            <th>Registration Date</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for client in clients %}
+                        <tr>
+                            <td>{{ client[0] }}</td>  {# ID (code) #}
+                            <td>{{ client[1] }}</td>  {# ClientName #}
+                            <td>{{ client[3].strftime('%Y-%m-%d') if client[3] else 'N/A' }}</td> {# Created_on #}
+                            <td>
+                                <span class="badge {% if client[2] %}bg-success{% else %}bg-danger{% endif %} status-badge">
+                                    {{ 'Active' if client[2] else 'Inactive' }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="/client/edit/{{ client[0] }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form action="/client/delete/{{ client[0] }}" method="post" style="display: inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this client?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

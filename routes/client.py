@@ -1,0 +1,74 @@
+from fastapi import APIRouter, Request, Form, HTTPException
+from fastapi.responses import RedirectResponse
+from starlette.status import HTTP_303_SEE_OTHER
+from fastapi.templating import Jinja2Templates
+from database import get_connection
+from utils.auth import get_user_info as get_current_user_info  # ✅ renamed for clarity
+
+templates = Jinja2Templates(directory="templates")
+router = APIRouter(prefix="/client")
+
+@router.get("/list")
+def client_list(request: Request):
+    user_info = get_current_user_info(request)  # ✅ extract username and role
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT ID, ClientName, IsActive, Created_on FROM ClientMaster")
+        clients = cursor.fetchall()
+
+    return templates.TemplateResponse("client/list.html", {
+        "request": request,
+        "clients": clients,
+        "username": user_info["username"],    # ✅ passed to base.html
+        "user_role": user_info["user_role"]   # ✅ passed to base.html
+    })
+
+@router.get("/create")
+def create_client_form(request: Request):
+    return templates.TemplateResponse("client/create.html", {"request": request})
+
+@router.post("/create")
+def create_client(ClientName: str = Form(...), IsActive: bool = Form(False)):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO ClientMaster (ClientName, IsActive) VALUES (?, ?)", (ClientName, int(IsActive)))
+        conn.commit()
+    return RedirectResponse("/client/list", status_code=HTTP_303_SEE_OTHER)
+
+@router.get("/edit/{id}")
+def edit_client_form(request: Request, id: int):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT ID, ClientName, IsActive FROM ClientMaster WHERE ID = ?", (id,))
+        client = cursor.fetchone()
+    return templates.TemplateResponse("client/edit.html", {"request": request, "client": client})
+
+@router.post("/edit/{id}")
+def update_client(id: int, ClientName: str = Form(...), IsActive: bool = Form(False)):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE ClientMaster SET ClientName = ?, IsActive = ? WHERE ID = ?", (ClientName, int(IsActive), id))
+        conn.commit()
+    return RedirectResponse("/client/list", status_code=HTTP_303_SEE_OTHER)
+
+# CHANGE FROM GET TO POST
+@router.post("/delete/{id}")
+def delete_client(id: int):
+    # Check if client has any insurance mappings before deletion
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Check for existing insurance registrations
+        cursor.execute("SELECT COUNT(*) FROM ClientInsauranceRegisteration WHERE ClientID = ?", (id,))
+        registration_count = cursor.fetchone()[0]
+        
+        if registration_count > 0:
+            # Client has insurance mappings, cannot delete
+            return RedirectResponse(f"/client/list?error=Cannot delete client. It has {registration_count} insurance registration(s).", status_code=HTTP_303_SEE_OTHER)
+        
+        # No registrations, safe to delete
+        cursor.execute("DELETE FROM ClientMaster WHERE ID = ?", (id,))
+        conn.commit()
+    
+    return RedirectResponse("/client/list", status_code=HTTP_303_SEE_OTHER)

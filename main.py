@@ -1,0 +1,774 @@
+from fastapi import FastAPI, HTTPException, Request, Form, Depends, UploadFile, File
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, validator
+from starlette.status import HTTP_303_SEE_OTHER
+from datetime import datetime, timedelta
+import pandas as pd
+import asyncio
+import io
+import os
+import bcrypt
+from jose import jwt
+from functools import wraps
+import logging
+from concurrent.futures import ThreadPoolExecutor
+
+# Local imports
+from database import get_connection
+from eligibility_checker import EligibilityChecker
+from routes import insurance
+from routes import client
+from routes import registration
+
+from config import SECRET_KEY, ALGORITHM, UPLOAD_DIR  # ✅ Safe, no circular imports
+from utils.auth import get_user_info as get_current_user_info  # ✅ centralized auth
+
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# -------------------- Logging Configuration --------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("app.log", encoding="utf-8")
+    ]
+)
+
+# -------------------- App Setup --------------------
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+executor = ThreadPoolExecutor(max_workers=5)
+
+# Include modular routes
+app.include_router(insurance.router)
+app.include_router(client.router)
+app.include_router(registration.router)
+
+# -------------------- Authentication Functions --------------------
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=30)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# def get_current_user_info(request: Request):
+#     """Get both username and user_role from JWT token"""
+#     token = request.cookies.get("access_token")
+#     if not token:
+#         raise HTTPException(status_code=401, detail="Not authenticated")
+#     try:
+#         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+#         username: str = payload.get("sub")
+#         if username is None:
+#             raise HTTPException(status_code=401, detail="Invalid token")
+        
+#         # Get role
+#         user_role = get_user_role(username)
+#         if user_role is None:
+#             raise HTTPException(status_code=403, detail="User role not found")
+        
+#         return {"username": username, "user_role": user_role}
+    
+#     except jwt.ExpiredSignatureError:
+#         raise HTTPException(status_code=401, detail="Token expired")
+#     except jwt.InvalidTokenError:
+#         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+
+# def get_user_role(username: str):
+#     """Get user role from database"""
+#     with get_connection() as conn:
+#         cursor = conn.cursor()
+#         cursor.execute("SELECT Role FROM Users WHERE Username = ? AND IsActive = 1", (username,))
+#         result = cursor.fetchone()
+#         return result[0] if result else None
+
+
+
+def require_role(required_role: str):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(request: Request, *args, **kwargs):
+            user_info = get_current_user_info(request)
+            if not user_info["user_role"] or user_info["user_role"] != required_role:
+                raise HTTPException(status_code=403, detail="Insufficient permissions")
+            return await func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+# -------------------- Utility Functions --------------------
+def get_clients(user_role: str, username: str):
+    """Get clients based on user role"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if user_role == "SuperAdmin":
+            cursor.execute("SELECT ID, ClientName FROM ClientMaster WHERE IsActive = 1")
+        else:
+            cursor.execute("SELECT ID, ClientName FROM ClientMaster WHERE (ClientName = ? OR ID = ?) AND IsActive = 1", 
+                          (username, username))
+        return cursor.fetchall()
+
+def get_upload_history(user_role: str, username: str):
+    """Get upload history based on user role"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if user_role == "SuperAdmin":
+            cursor.execute("""
+                SELECT uh.ID, cm.ClientName, uh.FileName, uh.UploadDate 
+                FROM UploadHistory uh
+                JOIN ClientMaster cm ON uh.ClientID = cm.ID
+                ORDER BY uh.UploadDate DESC
+            """)
+        else:
+            cursor.execute("""
+                SELECT uh.ID, cm.ClientName, uh.FileName, uh.UploadDate 
+                FROM UploadHistory uh
+                JOIN ClientMaster cm ON uh.ClientID = cm.ID
+                WHERE cm.ClientName = ? OR cm.ClientCode = ?
+                ORDER BY uh.UploadDate DESC
+            """, (username, username))
+        return cursor.fetchall()
+
+def get_patient_data(user_role: str, username: str):
+    """Get patient data based on user role"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if user_role == "SuperAdmin":
+            cursor.execute("""
+                SELECT TOP 10 
+                    er.EligibilityId, 
+                    er.AppointmentDateTime, 
+                    im.InsauranceName, 
+                    cm.ClientName, 
+                    CASE 
+                        WHEN ers.ID IS NULL THEN 'Pending' 
+                        WHEN ers.Is_Eligible = 'Yes' THEN 'Eligible' 
+                        ELSE 'Not Eligible' 
+                    END as Status,
+                    ers.Reference_No,
+                    er.Created_on,
+                    er.PatientFirstName + ' ' + er.PatientLastName as PatientName
+                FROM EligibilityRequest er
+                LEFT JOIN EligibilityResponse ers ON er.EligibilityId = ers.EligibilityRequestID
+                JOIN ClientMaster cm ON er.ClientID = cm.ID
+                JOIN InsauranceMaster im ON er.InsuranceId = im.ID
+                ORDER BY er.Created_on DESC
+            """)
+        else:
+            cursor.execute("""
+                SELECT TOP 10 
+                    er.EligibilityId, 
+                    er.AppointmentDateTime, 
+                    im.InsauranceName, 
+                    cm.ClientName, 
+                    CASE 
+                        WHEN ers.ID IS NULL THEN 'Pending' 
+                        WHEN ers.Is_Eligible = 'Yes' THEN 'Eligible' 
+                        ELSE 'Not Eligible' 
+                    END as Status,
+                    ers.Reference_No,
+                    er.Created_on,
+                    er.PatientFirstName + ' ' + er.PatientLastName as PatientName
+                FROM EligibilityRequest er
+                LEFT JOIN EligibilityResponse ers ON er.EligibilityId = ers.EligibilityRequestID
+                JOIN ClientMaster cm ON er.ClientID = cm.ID
+                JOIN InsauranceMaster im ON er.InsuranceId = im.ID
+                WHERE cm.ClientName = ? OR cm.ClientCode = ?
+                ORDER BY er.Created_on DESC
+            """, (username, username))
+        return cursor.fetchall()
+# -------------------- Authentication Routes --------------------
+@app.get("/")
+def root_redirect():
+    """Redirect root path to login"""
+    return RedirectResponse("/login")
+
+@app.get("/login")
+def login_form(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/login")
+def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT ID, Username, Password, Role FROM Users WHERE Username = ? AND IsActive = 1", (username,))
+        user = cursor.fetchone()
+    
+    if not user or not verify_password(password, user[2]):
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Invalid credentials"
+        })
+    
+    access_token = create_access_token(data={"sub": user[1]})
+    response = RedirectResponse("/dashboard", status_code=HTTP_303_SEE_OTHER)
+    response.set_cookie(key="access_token", value=access_token, httponly=True)
+    return response
+
+@app.get("/logout")
+def logout():
+    response = RedirectResponse("/login", status_code=HTTP_303_SEE_OTHER)
+    response.delete_cookie("access_token")
+    return response
+
+# -------------------- Dashboard Route --------------------
+@app.get("/dashboard")
+def dashboard(request: Request):
+    user_info = get_current_user_info(request)
+    username = user_info["username"]
+    user_role = user_info["user_role"]
+    
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Get dashboard stats
+        cursor.execute("SELECT COUNT(*) FROM InsauranceMaster WHERE IsActive = 1")
+        total_insurance = cursor.fetchone()[0]
+        
+        if user_role == "SuperAdmin":
+            cursor.execute("SELECT COUNT(*) FROM ClientMaster WHERE IsActive = 1")
+            active_clients = cursor.fetchone()[0]
+            
+            cursor.execute("""
+                SELECT COUNT(*) FROM EligibilityRequest 
+                WHERE CAST(Created_on AS DATE) = CAST(GETDATE() AS DATE)
+            """)
+            eligibility_today = cursor.fetchone()[0]
+            
+            cursor.execute("""
+                SELECT COUNT(*) FROM EligibilityRequest 
+                WHERE EligibilityId NOT IN (SELECT EligibilityRequestID FROM EligibilityResponse)
+            """)
+            pending_actions = cursor.fetchone()[0]
+            
+            # Get recent activity for SuperAdmin
+            cursor.execute("""
+                SELECT TOP 5 er.EligibilityId, cm.ClientName, im.InsauranceName, er.Created_on,
+                    CASE WHEN ers.ID IS NULL THEN 'Pending' ELSE 'Completed' END as Status
+                FROM EligibilityRequest er
+                LEFT JOIN EligibilityResponse ers ON er.EligibilityId = ers.EligibilityRequestID
+                JOIN ClientMaster cm ON er.ClientID = cm.ID
+                JOIN InsauranceMaster im ON er.InsuranceId = im.ID
+                ORDER BY er.Created_on DESC
+            """)
+        else:
+            # For Client users, we need to find their client ID from ClientMaster
+            cursor.execute("SELECT ID FROM ClientMaster WHERE ClientName = ?", (username,))
+            client_result = cursor.fetchone()
+            client_id = client_result[0] if client_result else None
+            
+            if not client_id:
+                active_clients = 0
+                eligibility_today = 0
+                pending_actions = 0
+                recent_activity = []
+            else:
+                cursor.execute("SELECT COUNT(*) FROM ClientMaster WHERE ID = ? AND IsActive = 1", (client_id,))
+                active_clients = cursor.fetchone()[0]
+                
+                cursor.execute("""
+                    SELECT COUNT(*) FROM EligibilityRequest 
+                    WHERE ClientID = ? AND CAST(Created_on AS DATE) = CAST(GETDATE() AS DATE)
+                """, (client_id,))
+                eligibility_today = cursor.fetchone()[0]
+                
+                cursor.execute("""
+                    SELECT COUNT(*) FROM EligibilityRequest 
+                    WHERE ClientID = ? AND EligibilityId NOT IN (SELECT EligibilityRequestID FROM EligibilityResponse)
+                """, (client_id,))
+                pending_actions = cursor.fetchone()[0]
+                
+                # Get recent activity for Client
+                cursor.execute("""
+                    SELECT TOP 5 er.EligibilityId, cm.ClientName, im.InsauranceName, er.Created_on, 
+                           CASE WHEN ers.ID IS NULL THEN 'Pending' ELSE 'Completed' END as Status
+                    FROM EligibilityRequest er
+                    LEFT JOIN EligibilityResponse ers ON er.EligibilityId = ers.EligibilityRequestID
+                    JOIN ClientMaster cm ON er.ClientID = cm.ID
+                    JOIN InsauranceMaster im ON er.InsuranceId = im.InsuranceCode
+                    WHERE er.ClientID = ?
+                    ORDER BY er.Created_on DESC
+                """, (client_id,))
+        
+        recent_activity = cursor.fetchall()
+        
+        # Get system status
+        cursor.execute("""
+            SELECT TOP 1 CreatedOn FROM EligibilityResponse ORDER BY CreatedOn DESC
+        """)
+        last_run = cursor.fetchone()
+        last_run_time = last_run[0] if last_run else None
+        
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "username": username,
+        "user_role": user_role,
+        "total_insurance": total_insurance,
+        "active_clients": active_clients,
+        "eligibility_today": eligibility_today,
+        "pending_actions": pending_actions,
+        "recent_activity": recent_activity,
+        "last_run_time": last_run_time
+    })
+
+# -------------------- Data Source Route --------------------
+@app.get("/datasource")
+def datasource_page(request: Request):
+    user_info = get_current_user_info(request)
+    username = user_info["username"]
+    user_role = user_info["user_role"]
+    
+    clients = get_clients(user_role, username)
+    upload_history = get_upload_history(user_role, username)
+    patient_data = get_patient_data(user_role, username)
+    
+    return templates.TemplateResponse("datasource.html", {
+        "request": request,
+        "username": username,
+        "user_role": user_role,
+        "clients": clients,
+        "upload_history": upload_history,
+        "patient_data": patient_data
+    })
+
+# -------------------- File Upload Route --------------------
+@app.post("/upload")
+async def upload_file(
+    request: Request, 
+    client_id: int = Form(...),
+    file: UploadFile = File(...)
+):
+    user_info = get_current_user_info(request)
+    username = user_info["username"]
+    user_role = user_info["user_role"]
+    
+    # Check if user has permission to upload for this client
+    if user_role != "SuperAdmin":
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT ID FROM ClientMaster WHERE (ClientName = ? OR ClientCode = ?) AND ID = ?", 
+                          (username, username, client_id))
+            client_result = cursor.fetchone()
+            if not client_result:
+                return templates.TemplateResponse("datasource.html", {
+                    "request": request,
+                    "username": username,
+                    "user_role": user_role,
+                    "error": "You don't have permission to upload for this client",
+                    "clients": get_clients(user_role, username),
+                    "upload_history": get_upload_history(user_role, username),
+                    "patient_data": get_patient_data(user_role, username)
+                })
+    
+    # Validate file type
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        return templates.TemplateResponse("datasource.html", {
+            "request": request,
+            "username": username,
+            "user_role": user_role,
+            "error": "Only Excel files are allowed",
+            "clients": get_clients(user_role, username),
+            "upload_history": get_upload_history(user_role, username),
+            "patient_data": get_patient_data(user_role, username)
+        })
+    
+    # Validate file size (10MB max)
+    file_size = 0
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    
+    with open(file_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+        file_size = len(content)
+    
+    if file_size > 10 * 1024 * 1024:  # 10MB
+        os.remove(file_path)
+        return templates.TemplateResponse("datasource.html", {
+            "request": request,
+            "username": username,
+            "user_role": user_role,
+            "error": "File size exceeds 10MB limit",
+            "clients": get_clients(user_role, username),
+            "upload_history": get_upload_history(user_role, username),
+            "patient_data": get_patient_data(user_role, username)
+        })
+    
+    # Save upload record to database
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO UploadHistory (ClientID, FileName, FileSize, UploadDate) VALUES (?, ?, ?, GETDATE())",
+            (client_id, file.filename, file_size)
+        )
+        conn.commit()
+    
+    # Process the Excel file using your existing automation
+    try:
+        # Read the Excel file
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+
+        if df.empty:
+            os.remove(file_path)
+            return templates.TemplateResponse("datasource.html", {
+                "request": request,
+                "username": username,
+                "user_role": user_role,
+                "error": "Uploaded file is empty",
+                "clients": get_clients(user_role, username),
+                "upload_history": get_upload_history(user_role, username),
+                "patient_data": get_patient_data(user_role, username)
+            })
+
+        grid_data = []
+        processed_count = 0
+        error_messages = []
+        
+        # Get client name for processing
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT ClientName FROM ClientMaster WHERE ID = ?", (client_id,))
+            client_name_result = cursor.fetchone()
+            client_name = client_name_result[0] if client_name_result else "Unknown"
+
+        # Loop through all rows in Excel
+        for index, row in df.iterrows():
+            try:
+                data = row.to_dict()
+
+                # ---------------- Step 2: Validate required fields ----------------
+                required_fields = [
+                    "ClinicDoctorId", "ClinicDoctorName", "ClinicDoctorLicense", "EmiratesId",
+                    "MobileCountryCode", "MobileNumber", "PatientFirstName", "PatientLastName",
+                    "ClinicLicense", "InsuranceCode", "DepartmentName", "SpecialityName",
+                    "AppointmentDateTime"
+                ]
+                
+                # Add ClientName to data since we know it from the form
+                data["ClientName"] = client_name
+                
+                missing = [f for f in required_fields if not data.get(f)]
+                if missing:
+                    error_messages.append(f"Row {index+2}: Missing required fields: {', '.join(missing)}")
+                    continue
+
+                # ---------------- Step 3: Lookup Client + Insurance ----------------
+                with get_connection() as conn:
+                    cursor = conn.cursor()
+
+                    cursor.execute("SELECT ID FROM ClientMaster WHERE ClientName=? AND IsActive=1", data["ClientName"])
+                    client_row = cursor.fetchone()
+                    if not client_row:
+                        error_messages.append(f"Row {index+2}: Client not found or inactive.")
+                        continue
+                    client_id = client_row[0]
+
+                    cursor.execute("SELECT ID FROM InsauranceMaster WHERE InsuranceCode=? AND IsActive=1", data["InsuranceCode"])
+                    ins_row = cursor.fetchone()
+                    if not ins_row:
+                        error_messages.append(f"Row {index+2}: Insurance not found or inactive.")
+                        continue
+                    insurance_id = ins_row[0]
+
+                    cursor.execute("""
+                        SELECT Username, Password FROM ClientInsauranceRegisteration 
+                        WHERE ClientID=? AND InsauranceID=? AND is_Active=1
+                    """, (client_id, insurance_id))
+                    cred_row = cursor.fetchone()
+                    if not cred_row:
+                        error_messages.append(f"Row {index+2}: Active registration not found for client-insurance.")
+                        continue
+                    portal_username, portal_password = cred_row
+
+                # ---------------- Step 4: Insert into EligibilityRequest ----------------
+                insert_request_query = """
+                INSERT INTO EligibilityRequest (
+                    ClinicDoctorId, ClinicDoctorName, ClinicDoctorLicense, EmiratesId,
+                    MobileCountryCode, MobileNumber, PatientFirstName, PatientLastName,
+                    ClinicLicense, InsuranceId, ClientID, DepartmentName, SpecialityName,
+                    AppointmentDateTime, Created_on
+                )
+                OUTPUT INSERTED.EligibilityId
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
+                """
+                values = (
+                    data["ClinicDoctorId"], data["ClinicDoctorName"], data["ClinicDoctorLicense"], data["EmiratesId"],
+                    data["MobileCountryCode"], data["MobileNumber"], data["PatientFirstName"], data["PatientLastName"],
+                    data["ClinicLicense"], insurance_id, client_id, data["DepartmentName"], data["SpecialityName"],
+                    data["AppointmentDateTime"]
+                )
+
+                with get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(insert_request_query, values)
+                    eligibility_request_id = cursor.fetchone()[0]
+                    conn.commit()
+
+                # ---------------- Step 5: Run Selenium Automation ----------------
+                loop = asyncio.get_event_loop()
+                response_data = await loop.run_in_executor(
+                    executor,
+                    trigger_selenium_script,
+                    portal_username,
+                    portal_password,
+                    data
+                )
+
+                if not response_data:
+                    error_messages.append(f"Row {index+2}: Failed to trigger automation script.")
+                    continue
+
+                # ---------------- Step 6: Insert into EligibilityResponse ----------------
+                member_policy = response_data.get("Member_Policy_Details", {}) or {}
+
+                insert_response_query = """
+                INSERT INTO EligibilityResponse (
+                    EligibilityRequestID, Reference_No, Request_Date, Effective_From, Effective_To, Effective_At,
+                    Is_Eligible, Coverage_Details, Notes, Emirates_ID, 
+                    TPA_Member_ID, Emirates_ID_Member, DHA_Member_ID, DOB, Gender, 
+                    Sub_Group, Category, Policy_Number, Client_Number, Policy_Authority, CreatedOn
+                ) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
+                """
+
+                response_values = (
+                    eligibility_request_id,
+                    response_data.get("Reference_No"),
+                    response_data.get("Request_Date"),
+                    response_data.get("Effective_From"),
+                    response_data.get("Effective_To"),
+                    response_data.get("Effective_At"),
+                    response_data.get("Is_Eligible"),
+                    response_data.get("Coverage_Details"),
+                    response_data.get("Notes"),
+                    response_data.get("Emirates_ID"),
+                    member_policy.get("TPA_Member_ID"),
+                    member_policy.get("Emirates_ID"),
+                    member_policy.get("DHA_Member_ID"),
+                    member_policy.get("DOB"),
+                    member_policy.get("Gender"),
+                    member_policy.get("Sub_Group"),
+                    member_policy.get("Category"),
+                    member_policy.get("Policy_Number"),
+                    member_policy.get("Client_Number"),
+                    member_policy.get("Policy_Authority"),
+                )
+
+                with get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(insert_response_query, response_values)
+                    conn.commit()
+
+                # ---------------- Step 7: Fetch data for grid ----------------
+                with get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT 
+                            r.EligibilityId,
+                            r.PatientFirstName + ' ' + r.PatientLastName AS Patient,
+                            i.InsauranceName AS Insurance,
+                            c.ClientName AS Client,
+                            resp.Reference_No,
+                            resp.Is_Eligible,
+                            resp.Notes
+                        FROM EligibilityRequest r
+                        JOIN ClientMaster c ON r.ClientID = c.ID
+                        JOIN InsauranceMaster i ON r.InsuranceId = i.ID
+                        LEFT JOIN EligibilityResponse resp ON r.EligibilityId = resp.EligibilityRequestID
+                        WHERE r.EligibilityId = ?
+                    """, (eligibility_request_id,))
+                    
+                    row = cursor.fetchone()
+
+                if row:
+                    grid_data.append({
+                        "EligibilityRequestID": row[0],
+                        "Patient": row[1],
+                        "Insurance": row[2],
+                        "Client": row[3],
+                        "Reference_No": row[4],
+                        "Is_Eligible": row[5],
+                        "Notes": row[6]
+                    })
+
+                processed_count += 1
+                
+            except Exception as e:
+                error_messages.append(f"Row {index+2}: {str(e)}")
+                continue
+
+        # Prepare success/error message
+        if processed_count > 0:
+            message = f"Successfully processed {processed_count} records"
+            if error_messages:
+                message += f". {len(error_messages)} records had errors."
+        else:
+            message = "No records were processed successfully."
+        
+        # Get updated patient data for display
+        updated_patient_data = get_patient_data(user_role, username)
+        
+        return templates.TemplateResponse("datasource.html", {
+            "request": request,
+            "username": username,
+            "user_role": user_role,
+            "message": message,
+            "clients": get_clients(user_role, username),
+            "upload_history": get_upload_history(user_role, username),
+            "patient_data": updated_patient_data,
+            "error_details": error_messages if error_messages else None
+        })
+        
+    except Exception as e:
+        return templates.TemplateResponse("datasource.html", {
+            "request": request,
+            "username": username,
+            "user_role": user_role,
+            "error": f"Error processing file: {str(e)}",
+            "clients": get_clients(user_role, username),
+            "upload_history": get_upload_history(user_role, username),
+            "patient_data": get_patient_data(user_role, username)
+        })
+
+# -------------------- Pydantic Model --------------------
+class AppointmentRequest(BaseModel):
+    ClinicDoctorId: str = None
+    ClinicDoctorName: str = None
+    ClinicDoctorLicense: str
+    EmiratesId: str
+    MobileCountryCode: str
+    MobileNumber: str
+    PatientFirstName: str = None
+    PatientLastName: str = None
+    ClinicLicense: str
+    InsuranceCode: str
+    ClientName: str
+    DepartmentName: str = None
+    SpecialityName: str = None
+    AppointmentDateTime: str
+
+    @validator("EmiratesId")
+    def validate_emirates_id(cls, v):
+        if not (v.startswith("784") and v.isdigit() and len(v) == 15):
+            raise ValueError("EmiratesId must start with 784, contain only digits, and be 15 digits long.")
+        return v
+
+    @validator("MobileNumber")
+    def validate_mobile_number(cls, v):
+        if not (v.isdigit() and len(v) == 9 and v.startswith("5")):
+            raise ValueError("MobileNumber must start with 5, contain only digits, and be 9 digits long.")
+        return v
+
+    @validator("AppointmentDateTime")
+    def validate_appointment_datetime(cls, v):
+        try:
+            appointment_dt = datetime.strptime(v, "%d/%m/%Y %H:%M")
+        except ValueError:
+            raise ValueError("AppointmentDateTime must be in format dd/MM/yyyy HH:mm")
+        if appointment_dt <= datetime.now():
+            raise ValueError("AppointmentDateTime must be in the future.")
+        return appointment_dt
+
+# -------------------- Utility Functions --------------------
+def trigger_selenium_script(username, password, data: dict):
+    """Run Selenium eligibility checker"""
+    eid = data["EmiratesId"]
+    mobile_num = data["MobileNumber"]
+    service_network = data["InsuranceCode"]
+
+    checker = EligibilityChecker(username, password)
+    response = checker.run(eid, mobile_num, service_network)
+    return response
+
+def save_to_eligibility_request_table(data: dict, client_id: int, insurance_id: int) -> int:
+    query = """
+    INSERT INTO EligibilityRequest (
+        ClinicDoctorId, ClinicDoctorName, ClinicDoctorLicense, EmiratesId,
+        MobileCountryCode, MobileNumber, PatientFirstName, PatientLastName,
+        ClinicLicense, InsuranceId, ClientID, DepartmentName, SpecialityName,
+        AppointmentDateTime, Created_on
+    ) 
+    OUTPUT INSERTED.EligibilityId
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
+    """
+    values = (
+        data.get("ClinicDoctorId"),
+        data.get("ClinicDoctorName"),
+        data.get("ClinicDoctorLicense"),
+        data.get("EmiratesId"),
+        data.get("MobileCountryCode"),
+        data.get("MobileNumber"),
+        data.get("PatientFirstName"),
+        data.get("PatientLastName"),
+        data.get("ClinicLicense"),
+        insurance_id,
+        client_id,
+        data.get("DepartmentName"),
+        data.get("SpecialityName"),
+        data.get("AppointmentDateTime"),
+    )
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, values)
+        eligibility_id = cursor.fetchone()[0]
+        conn.commit()
+        return eligibility_id
+
+def save_to_eligibility_response_table(data: dict, eligibility_request_id: int):
+    member_policy = data.get("Member_Policy_Details", {}) or {}
+    query = """
+    INSERT INTO EligibilityResponse (
+        EligibilityRequestID, Reference_No, Request_Date, Effective_From, Effective_To, Effective_At,
+        Is_Eligible, Coverage_Details, Notes, Emirates_ID, 
+        TPA_Member_ID, Emirates_ID_Member, DHA_Member_ID, DOB, Gender, 
+        Sub_Group, Category, Policy_Number, Client_Number, Policy_Authority, CreatedOn
+    ) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
+    """
+    values = (
+        eligibility_request_id,
+        data.get("Reference_No"),
+        data.get("Request_Date"),
+        data.get("Effective_From"),
+        data.get("Effective_To"),
+        data.get("Effective_At"),
+        data.get("Is_Eligible"),
+        data.get("Coverage_Details"),
+        data.get("Notes"),
+        data.get("Emirates_ID"),
+        member_policy.get("TPA_Member_ID"),
+        member_policy.get("Emirates_ID"),
+        member_policy.get("DHA_Member_ID"),
+        member_policy.get("DOB"),
+        member_policy.get("Gender"),
+        member_policy.get("Sub_Group"),
+        member_policy.get("Category"),
+        member_policy.get("Policy_Number"),
+        member_policy.get("Client_Number"),
+        member_policy.get("Policy_Authority"),
+    )
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, values)
+        conn.commit()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)

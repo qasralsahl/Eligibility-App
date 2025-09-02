@@ -1,0 +1,24 @@
+ Final Response:
+{
+    "Reference_No": "R-000000316536325",
+    "Request_Date": "31-Jul-2025 23:37:01",
+    "Effective_From": "01-Jan-2025",
+    "Effective_To": "31-Dec-2025",
+    "Effective_At": "Cigna",
+    "Is_Eligible?": "Eligible",
+    "Coverage_Details": "Referral required :\nNo referral required for specialist consultation\nCopay 20% Max 50.00 AED applicable for :\nConsultation / Evaluation and Management, Palliative, Dietician Services, Child Wellness",
+    "Notes": "Valid memeber for Service Provider",
+    "Emirates_ID": "784197631751639",
+    "Member_Policy_Details": {
+        "TPA_Member_ID": "52GM8789656764202",
+        "Emirates_ID": "784-1976-3175163-9",
+        "DHA_Member_ID": "I137-001-113735194-01",
+        "DOB": "09-Nov-1976",
+        "Gender": "Female",
+        "Sub_Group": "BP MIDDLE EAST LLC",
+        "Category": "DHA",
+        "Policy_Number": "605873",
+        "Client_Number": "INS137",
+        "Policy_Authority": "Dubai Health Authority"
+    }
+}

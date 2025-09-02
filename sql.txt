@@ -1,0 +1,90 @@
+CREATE TABLE InsauranceMaster (
+    ID INT PRIMARY KEY IDENTITY(1,1),
+    InsuranceCode VARCHAR(50),
+    InsauranceName VARCHAR(100),
+    is_Active BIT DEFAULT 1,
+    CreatedOn DATETIME DEFAULT GETDATE()
+);
+
+
+INSERT INTO InsauranceMaster (InsuranceCode, InsauranceName)
+VALUES 
+('NAS', 'National Oil Company'),
+('Neuron', 'Neuron Insurance Dubai');
+
+
+CREATE TABLE ClientMaster (
+    ID INT PRIMARY KEY IDENTITY(1,1),
+    ClientName VARCHAR(100),
+    is_Active BIT DEFAULT 1,
+    Created_on DATETIME DEFAULT GETDATE()
+);
+INSERT INTO ClientMaster (ClientName)
+VALUES ('Zahra Clinics');
+
+CREATE TABLE ClientInsauranceRegisteration (
+    ID INT PRIMARY KEY IDENTITY(1,1),
+    ClientID INT FOREIGN KEY REFERENCES ClientMaster(ID),
+    InsauranceID INT FOREIGN KEY REFERENCES InsauranceMaster(ID),
+    Username VARCHAR(100),
+    Password VARCHAR(100),
+    is_Active BIT DEFAULT 1,
+    Created_on DATETIME DEFAULT GETDATE()
+);
+INSERT INTO ClientInsauranceRegisteration (ClientID, InsauranceID, Username, Password)
+VALUES (1, 1, 'zahra_user', 'pass123');
+
+===============================================
+
+CREATE TABLE EligibilityRequest (
+    EligibilityId INT PRIMARY KEY IDENTITY(1,1),
+    ClinicDoctorId VARCHAR(50) NULL,
+    ClinicDoctorName VARCHAR(100) NULL,
+    ClinicDoctorLicense VARCHAR(50) NOT NULL,
+    EmiratesId VARCHAR(50) NOT NULL,
+    MobileCountryCode VARCHAR(10) NOT NULL,
+    MobileNumber VARCHAR(20) NOT NULL,
+    PatientFirstName VARCHAR(100) NULL,
+    PatientLastName VARCHAR(100) NULL,
+    ClinicLicense VARCHAR(50) NOT NULL,
+    InsuranceId VARCHAR(50) NOT NULL,
+    ClientID VARCHAR(100) NOT NULL,
+    DepartmentName VARCHAR(100) NULL,
+    SpecialityName VARCHAR(100) NULL,
+    AppointmentDateTime DATETIME NOT NULL,
+    Created_on DATETIME DEFAULT GETDATE()
+);
+
+
+
+CREATE TABLE EligibilityResponse (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    EligibilityRequestID INT FOREIGN KEY REFERENCES EligibilityRequest(ID),
+
+    IsEligible VARCHAR(10),
+    Network NVARCHAR(255),
+    CoverageDetails NVARCHAR(MAX),
+    Notes NVARCHAR(MAX),
+    RequestDateTime DATETIME,
+    ResponseDateTime DATETIME,
+    Reference_No NVARCHAR(100),
+    Effective_From DATETIME,
+    Effective_To DATETIME,
+    Effective_At DATETIME,
+
+    -- Flattened Member_Policy_Details
+    PA_Member_ID NVARCHAR(50),
+    Emirates_ID NVARCHAR(25),
+    DHA_Member_ID NVARCHAR(50),
+    DOB DATE,
+    Gender VARCHAR(10),
+    Sub_Group NVARCHAR(255),
+    Category NVARCHAR(100),
+    Policy_Number NVARCHAR(100),
+    Client_Number NVARCHAR(100),
+    Policy_Authority NVARCHAR(255),
+
+    Attachment NVARCHAR(MAX), -- base64 string
+
+    CreatedOn DATETIME DEFAULT GETDATE()
+);

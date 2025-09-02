@@ -1,0 +1,141 @@
+2025-09-01 01:29:30,937 [INFO] ✅ Browser initialized.
+2025-09-01 01:29:31,637 [INFO] ✅ Page fully loaded.
+2025-09-01 01:29:31,665 [INFO] Element found, Entering Credentials now.....
+2025-09-01 01:29:36,067 [INFO] ✅ Page fully loaded.
+2025-09-01 01:29:36,081 [INFO] ❌ Wrong Credentials.....
+ Please try again!
+2025-09-01 01:29:36,082 [INFO] Filling form for 784197859714301 with mobile 559692961
+2025-09-01 01:29:36,090 [INFO] ✅ Page fully loaded.
+2025-09-01 01:29:57,374 [INFO] close_modal_eligibility_check_click Done
+2025-09-01 01:30:17,704 [INFO] Title: Jet Login - NNHS Authentication Service
+2025-09-01 01:30:17,704 [INFO] ❌ Radio button error: Message: 
+Stacktrace:
+	GetHandleVerifier [0x0x7ff669d03d85+79397]
+	GetHandleVerifier [0x0x7ff669d03de0+79488]
+	(No symbol) [0x0x7ff669aac0fa]
+	(No symbol) [0x0x7ff669b02fd6]
+	(No symbol) [0x0x7ff669b0328c]
+	(No symbol) [0x0x7ff669b56537]
+	(No symbol) [0x0x7ff669b2b1df]
+	(No symbol) [0x0x7ff669b53344]
+	(No symbol) [0x0x7ff669b2af73]
+	(No symbol) [0x0x7ff669af41b1]
+	(No symbol) [0x0x7ff669af4f43]
+	GetHandleVerifier [0x0x7ff669fce1ed+3005069]
+	GetHandleVerifier [0x0x7ff669fc831d+2980797]
+	GetHandleVerifier [0x0x7ff669fe7e0d+3110573]
+	GetHandleVerifier [0x0x7ff669d1d6de+184190]
+	GetHandleVerifier [0x0x7ff669d2516f+215567]
+	GetHandleVerifier [0x0x7ff669d0c974+115220]
+	GetHandleVerifier [0x0x7ff669d0cb29+115657]
+	GetHandleVerifier [0x0x7ff669cf3268+11016]
+	BaseThreadInitThunk [0x0x7ff9c4e7e8d7+23]
+	RtlUserThreadStart [0x0x7ff9c653c34c+44]
+
+2025-09-01 01:30:38,028 [INFO] Title: Jet Login - NNHS Authentication Service
+2025-09-01 01:30:38,028 [INFO] ❌ Form fill error: Message: 
+Stacktrace:
+	GetHandleVerifier [0x0x7ff669d03d85+79397]
+	GetHandleVerifier [0x0x7ff669d03de0+79488]
+	(No symbol) [0x0x7ff669aac0fa]
+	(No symbol) [0x0x7ff669b02fd6]
+	(No symbol) [0x0x7ff669b0328c]
+	(No symbol) [0x0x7ff669b56537]
+	(No symbol) [0x0x7ff669b2b1df]
+	(No symbol) [0x0x7ff669b53344]
+	(No symbol) [0x0x7ff669b2af73]
+	(No symbol) [0x0x7ff669af41b1]
+	(No symbol) [0x0x7ff669af4f43]
+	GetHandleVerifier [0x0x7ff669fce1ed+3005069]
+	GetHandleVerifier [0x0x7ff669fc831d+2980797]
+	GetHandleVerifier [0x0x7ff669fe7e0d+3110573]
+	GetHandleVerifier [0x0x7ff669d1d6de+184190]
+	GetHandleVerifier [0x0x7ff669d2516f+215567]
+	GetHandleVerifier [0x0x7ff669d0c974+115220]
+	GetHandleVerifier [0x0x7ff669d0cb29+115657]
+	GetHandleVerifier [0x0x7ff669cf3268+11016]
+	BaseThreadInitThunk [0x0x7ff9c4e7e8d7+23]
+	RtlUserThreadStart [0x0x7ff9c653c34c+44]
+
+2025-09-01 01:30:38,029 [INFO] 🔁 Attempt 1 for 784197859714301...
+2025-09-01 01:30:58,462 [INFO] Attempt 1 failed: Message: 
+Stacktrace:
+	GetHandleVerifier [0x0x7ff669d03d85+79397]
+	GetHandleVerifier [0x0x7ff669d03de0+79488]
+	(No symbol) [0x0x7ff669aac0fa]
+	(No symbol) [0x0x7ff669b02fd6]
+	(No symbol) [0x0x7ff669b0328c]
+	(No symbol) [0x0x7ff669b56537]
+	(No symbol) [0x0x7ff669b2b1df]
+	(No symbol) [0x0x7ff669b53344]
+	(No symbol) [0x0x7ff669b2af73]
+	(No symbol) [0x0x7ff669af41b1]
+	(No symbol) [0x0x7ff669af4f43]
+	GetHandleVerifier [0x0x7ff669fce1ed+3005069]
+	GetHandleVerifier [0x0x7ff669fc831d+2980797]
+	GetHandleVerifier [0x0x7ff669fe7e0d+3110573]
+	GetHandleVerifier [0x0x7ff669d1d6de+184190]
+	GetHandleVerifier [0x0x7ff669d2516f+215567]
+	GetHandleVerifier [0x0x7ff669d0c974+115220]
+	GetHandleVerifier [0x0x7ff669d0cb29+115657]
+	GetHandleVerifier [0x0x7ff669cf3268+11016]
+	BaseThreadInitThunk [0x0x7ff9c4e7e8d7+23]
+	RtlUserThreadStart [0x0x7ff9c653c34c+44]
+
+2025-09-01 01:30:58,463 [INFO] 🔁 Attempt 2 for 784197859714301...
+2025-09-01 01:31:18,957 [INFO] Attempt 2 failed: Message: 
+Stacktrace:
+	GetHandleVerifier [0x0x7ff669d03d85+79397]
+	GetHandleVerifier [0x0x7ff669d03de0+79488]
+	(No symbol) [0x0x7ff669aac0fa]
+	(No symbol) [0x0x7ff669b02fd6]
+	(No symbol) [0x0x7ff669b0328c]
+	(No symbol) [0x0x7ff669b56537]
+	(No symbol) [0x0x7ff669b2b1df]
+	(No symbol) [0x0x7ff669b53344]
+	(No symbol) [0x0x7ff669b2af73]
+	(No symbol) [0x0x7ff669af41b1]
+	(No symbol) [0x0x7ff669af4f43]
+	GetHandleVerifier [0x0x7ff669fce1ed+3005069]
+	GetHandleVerifier [0x0x7ff669fc831d+2980797]
+	GetHandleVerifier [0x0x7ff669fe7e0d+3110573]
+	GetHandleVerifier [0x0x7ff669d1d6de+184190]
+	GetHandleVerifier [0x0x7ff669d2516f+215567]
+	GetHandleVerifier [0x0x7ff669d0c974+115220]
+	GetHandleVerifier [0x0x7ff669d0cb29+115657]
+	GetHandleVerifier [0x0x7ff669cf3268+11016]
+	BaseThreadInitThunk [0x0x7ff9c4e7e8d7+23]
+	RtlUserThreadStart [0x0x7ff9c653c34c+44]
+
+2025-09-01 01:55:01,585 [INFO] ✅ Browser initialized.
+2025-09-01 01:55:02,338 [INFO] ✅ Page fully loaded.
+2025-09-01 01:55:02,362 [INFO] Element found, Entering Credentials now.....
+2025-09-01 01:55:06,909 [INFO] ✅ Page fully loaded.
+2025-09-01 01:55:08,407 [INFO] ✅ Logged in successfully, Title: HPS Home Page
+2025-09-01 01:55:08,407 [INFO] Filling form for 784197859714301 with mobile 559692961
+2025-09-01 01:55:08,416 [INFO] ✅ Page fully loaded.
+2025-09-01 01:55:09,591 [INFO] ✅ Modal closed.
+2025-09-01 01:55:09,825 [INFO] close_modal_eligibility_check_click Done
+2025-09-01 01:55:10,453 [INFO] Selected NAS option.
+2025-09-01 01:55:12,196 [INFO] Captcha: 23AzV
+2025-09-01 01:55:12,544 [INFO] Form submitted successfully!
+2025-09-01 01:55:12,545 [INFO] 🔁 Attempt 1 for 784197859714301...
+2025-09-01 01:55:16,522 [INFO] Saving screenshot and PDF...
+2025-09-01 01:55:17,162 [INFO] Screenshot saved for 784197859714301
+2025-09-01 01:55:18,301 [INFO] Saved documents for 784197859714301
+2025-09-01 01:55:19,680 [INFO] 
+
+ Final Response:
+{
+    "Reference_No": "R-000000322573759",
+    "Request_Date": "01-Sep-2025 01:55:16",
+    "Effective_From": "9/1/2025 1:55:15 AM",
+    "Effective_To": "9/1/2025 1:55:15 AM",
+    "Effective_At": "",
+    "Is_Eligible": "Not Eligible",
+    "Coverage_Details": "",
+    "Notes": "   Invalid Member Identifier For Service Provider.",
+    "Emirates_ID": 784197859714301,
+    "Member_Policy_Details": ""
+}
+
