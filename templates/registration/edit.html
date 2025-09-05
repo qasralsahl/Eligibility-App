@@ -2,73 +2,123 @@
 
 {% block content %}
 <div class="content-section active">
-    <h2 class="mb-4">Edit Registration</h2>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">Edit Client Configuration</h2>
+            <p class="text-muted mb-0">Update portal credentials and insurance mappings</p>
+        </div>
+    </div>
 
     <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Registration Details</h5>
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Configuration Details</h5>
         </div>
         <div class="card-body">
             <form method="post" action="/registration/edit/{{ registration[0] }}">
-                <div class="row">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Client*</label>
+                        <select class="form-select" name="ClientID" required>
+                            <option value="">Select Client</option>
+                            {% for client in clients %}
+                            <option value="{{ client[0] }}" {% if client[0] == registration[1] %}selected{% endif %}>{{ client[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Insurance*</label>
+                        <select class="form-select" name="InsauranceID" required>
+                            <option value="">Select Insurance</option>
+                            {% for insurance in insurances %}
+                            <option value="{{ insurance[0] }}" {% if insurance[0] == registration[2] %}selected{% endif %}>{{ insurance[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Status</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="is_Active" id="statusToggle" {% if registration[5] == 1 or registration[5] == True %}checked{% endif %}>
+                            <label class="form-check-label" for="statusToggle">Active</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Portal Username*</label>
+                        <input type="text" class="form-control" name="Username" 
+                               value="{{ registration[3] or '' }}"
+                               pattern="[A-Za-z0-9\-_]+" 
+                               title="Only alphanumeric characters, hyphens, and underscores are allowed" 
+                               required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Password*</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" name="Password" id="passwordField"
+                                   value="{{ registration[4] or '' }}"
+                                   pattern="^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$"
+                                   title="Minimum 8 characters with at least one capital letter, one number, and one special character"
+                                   required>
+                            <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Must be at least 8 characters with one capital letter, one number, and one special character
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Expiration Date*</label>
+                        <input type="date" class="form-control" name="ExpirationDate" 
+                              value="{{ registration[7] if registration[7] else '' }}"
+                               min="{{ current_date }}" required>
+                    </div>
+                </div>
+<!-- 
+                <div class="row mb-3">
                     <div class="col-md-6">
-                        <div class="mb-3">
-                            <label class="form-label">Select Client</label>
-                            <select class="form-select" name="ClientID" required>
-                                {% for client in clients %}
-                                <option value="{{ client[0] }}" {% if client[0] == registration[1] %}selected{% endif %}>{{ client[1] }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
+                        <label class="form-label">API Key (Optional)</label>
+                        <input type="text" class="form-control" name="APIKey" 
+                               value="{{ registration[6] if registration[6] else '' }}"
+                               placeholder="API key for advanced integrations">
                     </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label class="form-label">Select Insurance</label>
-                            <select class="form-select" name="InsauranceID" required>
-                                {% for insurance in insurances %}
-                                <option value="{{ insurance[0] }}" {% if insurance[0] == registration[2] %}selected{% endif %}>{{ insurance[1] }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                </div>
+                </div> -->
 
-                {% if is_assigned %}
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label class="form-label">Username</label>
-                            <input type="text" class="form-control" name="Username" value="{{ registration[3] or '' }}">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label class="form-label">Password</label>
-                            <input type="password" class="form-control" name="Password" value="{{ registration[4] or '' }}">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label class="form-label">Expiration Date</label>
-                            <input type="date" class="form-control" name="ExpirationDate" value="{{ registration[7].strftime('%Y-%m-%d') if registration[7] else '' }}">
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                <div class="mb-3">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" name="is_Active" id="editRegistrationActive" {% if registration[5] %}checked{% endif %}>
-                        <label class="form-check-label" for="editRegistrationActive">Active</label>
-                    </div>
-                </div>
-
-                <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary">Update Registration</button>
+                <div class="d-flex justify-content-end gap-2">
                     <a href="/registration/list" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Update Configuration</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Password visibility toggle for form
+    const togglePassword = document.getElementById('togglePassword');
+    if (togglePassword) {
+        togglePassword.addEventListener('click', function() {
+            const passwordField = document.getElementById('passwordField');
+            if (passwordField) {
+                const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordField.setAttribute('type', type);
+                const icon = this.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('fa-eye');
+                    icon.classList.toggle('fa-eye-slash');
+                }
+            }
+        });
+    }
+    
+    // Set minimum date to today for expiration date
+    const today = new Date().toISOString().split('T')[0];
+    const expirationInput = document.querySelector('input[name="ExpirationDate"]');
+    if (expirationInput) {
+        expirationInput.setAttribute('min', today);
+    }
+});
+</script>
 {% endblock %}

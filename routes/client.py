@@ -5,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 from database import get_connection
 from utils.auth import get_user_info as get_current_user_info  # ✅ renamed for clarity
 
+
 templates = Jinja2Templates(directory="templates")
 router = APIRouter(prefix="/client")
 
@@ -26,7 +27,12 @@ def client_list(request: Request):
 
 @router.get("/create")
 def create_client_form(request: Request):
-    return templates.TemplateResponse("client/create.html", {"request": request})
+    user_info = get_current_user_info(request)  # ✅ extract username and role
+    return templates.TemplateResponse("client/create.html", {
+        "request": request,
+        "username": user_info["username"],    # ✅ passed to base.html
+        "user_role": user_info["user_role"]   # ✅ passed to base.html
+        })
 
 @router.post("/create")
 def create_client(ClientName: str = Form(...), IsActive: bool = Form(False)):
@@ -38,11 +44,16 @@ def create_client(ClientName: str = Form(...), IsActive: bool = Form(False)):
 
 @router.get("/edit/{id}")
 def edit_client_form(request: Request, id: int):
+    user_info = get_current_user_info(request)  # ✅ extract username and role
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT ID, ClientName, IsActive FROM ClientMaster WHERE ID = ?", (id,))
         client = cursor.fetchone()
-    return templates.TemplateResponse("client/edit.html", {"request": request, "client": client})
+    return templates.TemplateResponse("client/edit.html", {
+        "request": request, "client": client,
+        "username": user_info["username"],      # ✅ Pass to
+        "user_role": user_info["user_role"]     # ✅ Pass to template
+        })
 
 @router.post("/edit/{id}")
 def update_client(id: int, ClientName: str = Form(...), IsActive: bool = Form(False)):
