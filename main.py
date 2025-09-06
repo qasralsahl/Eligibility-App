@@ -369,7 +369,7 @@ def get_patient_data(user_role: str, username: str):
                     cm.ClientName as ClientName,
                     CASE 
                         WHEN ers.ID IS NULL THEN 'Pending' 
-                        WHEN ers.Is_Eligible = 'Yes' THEN 'Eligible' 
+                        WHEN ers.Is_Eligible = 'Eligible' THEN 'Eligible' 
                         ELSE 'Not Eligible' 
                     END as Status,
                     er.Created_on as UploadedDate

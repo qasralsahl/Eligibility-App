@@ -66,7 +66,7 @@
                                    pattern="^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$"
                                    title="Minimum 8 characters with at least one capital letter, one number, and one special character"
                                    required>
-                            <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                            <button class="btn btn-outline-secondary toggle-password" type="button"  id="togglePassword">
                                 <i class="fas fa-eye"></i>
                             </button>
                         </div>
@@ -90,7 +90,8 @@
                 </div>
 
                 <div class="d-flex justify-content-end">
-                    <button type="button" class="btn btn-secondary me-2" id="cancelBtn">Cancel</button>
+                    <!-- <button type="button" class="btn btn-secondary me-2" id="cancelBtn" href="/registration/list">Cancel</button> -->
+                     <a href="/registration/list" class="btn btn-secondary me-3">Cancel</a>
                     <button type="submit" class="btn btn-primary" id="submitBtn">Save Configuration</button>
                 </div>
             </form>
@@ -128,7 +129,7 @@
                                     <input type="password" class="form-control password-field" 
                                            value="{{ registration[4] }}" readonly 
                                            id="password-{{ registration[0] }}">
-                                    <button class="btn btn-outline-secondary toggle-password" type="button" 
+                                    <button class="btn btn-outline-secondary toggle-password" type="button" id="togglePassword1" 
                                             data-target="password-{{ registration[0] }}">
                                         <i class="fas fa-eye"></i>
                                     </button>
@@ -183,7 +184,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Password visibility toggle for form
-    const togglePassword = document.getElementById('togglePassword');
+    // var togglePassword = document.getElementById('togglePassword');
+     var togglePassword = document.getElementsByClassName('toggle-password');
     if (togglePassword) {
         togglePassword.addEventListener('click', function() {
             const passwordField = document.getElementById('passwordField');
