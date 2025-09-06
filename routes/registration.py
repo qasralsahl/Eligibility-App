@@ -5,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 from database import get_connection
 from datetime import datetime
 import re
+from typing import Optional
 from utils.auth import get_user_info as get_current_user_info  # ✅ renamed for clarity
 
 
@@ -60,8 +61,10 @@ def create_registration(
     Username: str = Form(...),
     Password: str = Form(...),
     ExpirationDate: str = Form(...),
-    is_Active: int = Form(1)
+    is_Active: Optional[str] = Form(None)
+
 ):
+    is_active_value = 1 if is_Active == "on" else 0
     # Validate username format (alphanumeric, hyphen, underscore only)
     if not re.match(r'^[A-Za-z0-9\-_]+$', Username):
         raise HTTPException(
@@ -124,7 +127,7 @@ def create_registration(
         """INSERT INTO ClientInsauranceRegisteration 
            (ClientID, InsauranceID, Username, Password, ExpirationDate, is_Active, Created_on) 
            VALUES (?, ?, ?, ?, ?, ?, GETDATE())""",
-        (ClientID, InsauranceID, Username, Password, ExpirationDate, is_Active)
+        (ClientID, InsauranceID, Username, Password, ExpirationDate, is_active_value)
     )
     
     conn.commit()
@@ -134,6 +137,7 @@ def create_registration(
 
 @router.get("/edit/{id}")
 def edit_registration_form(request: Request, id: int):
+    user_info = get_current_user_info(request)  # ✅ extract username and role
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -149,16 +153,18 @@ def edit_registration_form(request: Request, id: int):
         if not registration:
             raise HTTPException(status_code=404, detail="Registration not found")
         
-        cursor.execute("SELECT ID, ClientName FROM ClientMaster WHERE is_Active = 1")
+        cursor.execute("SELECT ID, ClientName FROM ClientMaster WHERE IsActive = 1")
         clients = cursor.fetchall()
-        cursor.execute("SELECT ID, InsauranceName FROM InsauranceMaster WHERE is_Active = 1")
+        cursor.execute("SELECT ID, InsauranceName FROM InsauranceMaster WHERE IsActive = 1")
         insurances = cursor.fetchall()
         
     return templates.TemplateResponse("registration/edit.html", {
         "request": request, 
         "registration": registration, 
         "clients": clients, 
-        "insurances": insurances
+        "insurances": insurances,
+        "username": user_info["username"],      # ✅ Pass to
+        "user_role": user_info["user_role"]     # ✅ Pass to template
     })
 
 @router.post("/edit/{id}")
@@ -169,8 +175,11 @@ def update_registration(
     Username: str = Form(...),
     Password: str = Form(...),
     ExpirationDate: str = Form(...),
-    is_Active: int = Form(1)
+    is_Active: Optional[str] = Form(None)
+
 ):
+    is_active_value = 1 if is_Active == "on" else 0
+    # import pdb; pdb.set_trace()
     # Validate username format
     if not re.match(r'^[A-Za-z0-9\-_]+$', Username):
         raise HTTPException(
@@ -233,14 +242,15 @@ def update_registration(
                SET ClientID=?, InsauranceID=?, Username=?, Password=?, 
                    ExpirationDate=?, is_Active=?
                WHERE ID=?""",
-            (ClientID, InsauranceID, Username, Password, ExpirationDate, is_Active, id)
+            (ClientID, InsauranceID, Username, Password, ExpirationDate, is_active_value, id)
         )
         
         conn.commit()
     
     return RedirectResponse("/registration/list", status_code=HTTP_303_SEE_OTHER)
 
-@router.get("/delete/{id}")
+
+@router.post("/delete/{id}")
 def delete_registration(id: int):
     conn = get_connection()
     cursor = conn.cursor()

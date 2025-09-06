@@ -42,21 +42,12 @@
                             Configuration already exists for this client-insurance combination
                         </div>
                     </div>
-                    <!-- <div class="col-md-4">
-                        <label class="form-label">Status</label>
-                        <div class="form-check form-switch mt-2">
-                        <input type="hidden" name="is_Active" value="0">
-                        <input class="form-check-input" type="checkbox" name="is_Active" value="1" id="statusToggle" checked>
-
-                            <label class="form-check-label" for="statusToggle">Active</label>
-                        </div>
-                    </div> -->
                     <div class="col-md-4">
                         <label class="form-label">Status</label>
-                        <select class="form-select" name="is_Active">
-                            <option value="1" selected>Active</option>
-                            <option value="0">Inactive</option>
-                        </select>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="is_Active" id="statusToggle" checked>
+                            <label class="form-check-label" for="statusToggle">Active</label>
+                        </div>
                     </div>
                 </div>
 
@@ -75,7 +66,7 @@
                                    pattern="^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$"
                                    title="Minimum 8 characters with at least one capital letter, one number, and one special character"
                                    required>
-                            <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                            <button class="btn btn-outline-secondary toggle-password" type="button"  id="togglePassword">
                                 <i class="fas fa-eye"></i>
                             </button>
                         </div>
@@ -99,7 +90,8 @@
                 </div>
 
                 <div class="d-flex justify-content-end">
-                    <button type="button" class="btn btn-secondary me-2" id="cancelBtn">Cancel</button>
+                    <!-- <button type="button" class="btn btn-secondary me-2" id="cancelBtn" href="/registration/list">Cancel</button> -->
+                     <a href="/registration/list" class="btn btn-secondary me-3">Cancel</a>
                     <button type="submit" class="btn btn-primary" id="submitBtn">Save Configuration</button>
                 </div>
             </form>
@@ -192,7 +184,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Password visibility toggle for form
-    var togglePassword = document.getElementById('togglePassword');
+    // var togglePassword = document.getElementById('togglePassword');
+     var togglePassword = document.getElementsByClassName('toggle-password');
     if (togglePassword) {
         togglePassword.addEventListener('click', function() {
             const passwordField = document.getElementById('passwordField');
@@ -208,23 +201,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-     var togglePassword = document.getElementById('togglePassword1');
-    if (togglePassword) {
-        togglePassword1.addEventListener('click', function() {
-            const passwordField = document.getElementById('passwordField');
-            if (passwordField) {
-                const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
-                passwordField.setAttribute('type', type);
-                const icon = this.querySelector('i');
-                if (icon) {
-                    icon.classList.toggle('fa-eye');
-                    icon.classList.toggle('fa-eye-slash');
-                }
-            }
-        });
-    }
-    
-
     // Table password toggles - Fixed with event delegation
     document.addEventListener('click', function(e) {
         if (e.target && e.target.closest('.toggle-password')) {

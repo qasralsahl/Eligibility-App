@@ -27,7 +27,12 @@ def list_insurance(request: Request):
     })
 @router.get("/create")
 def create_insurance_form(request: Request):
-    return templates.TemplateResponse("insurance/create.html", {"request": request})
+    user_info = get_current_user_info(request)  # ✅ extract username and role
+    return templates.TemplateResponse("insurance/create.html", {
+        "request": request,
+        "username": user_info["username"],      # ✅ Pass to template
+        "user_role": user_info["user_role"]     # ✅ Pass to template
+        })
 
 @router.post("/create")
 def create_insurance(InsuranceCode: str = Form(...), InsauranceName: str = Form(...)):
@@ -40,12 +45,17 @@ def create_insurance(InsuranceCode: str = Form(...), InsauranceName: str = Form(
 
 @router.get("/edit/{id}")
 def edit_insurance_form(request: Request, id: int):
+    user_info = get_current_user_info(request)  # ✅ extract username and role
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT ID, InsuranceCode, InsauranceName, IsActive FROM InsauranceMaster WHERE ID = ?", (id,))
     insurance = cursor.fetchone()
     conn.close()
-    return templates.TemplateResponse("insurance/edit.html", {"request": request, "insurance": insurance})
+    return templates.TemplateResponse("insurance/edit.html", {
+        "request": request, "insurance": insurance,
+        "username": user_info["username"],      # ✅ Pass to
+        "user_role": user_info["user_role"]     # ✅ Pass to template
+        })
 
 @router.post("/edit/{id}")
 def update_insurance(id: int, InsuranceCode: str = Form(...), InsauranceName: str = Form(...),  IsActive: str = Form("off")):
