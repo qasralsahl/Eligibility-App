@@ -8,7 +8,6 @@ import re
 from typing import Optional
 from utils.auth import get_user_info as get_current_user_info  # ✅ renamed for clarity
 
-
 templates = Jinja2Templates(directory="templates")
 router = APIRouter(prefix="/registration")
 
@@ -19,24 +18,24 @@ def list_registrations(request: Request):
     cursor = conn.cursor()
     cursor.execute("""
     SELECT 
-        r.ID, 
-        c.ClientName, 
-        i.InsauranceName, 
-        r.Username, 
-        r.Password,
-        r.is_Active, 
-        r.ClientID, 
-        r.InsauranceID, 
-        r.ExpirationDate
-    FROM ClientInsauranceRegisteration r
-    JOIN ClientMaster c ON r.ClientID = c.ID
-    JOIN InsauranceMaster i ON r.InsauranceID = i.ID
+        cic.ID, 
+        u.ClientName, 
+        im.InsuranceName, 
+        cic.Username, 
+        cic.Password,
+        cic.IsActive, 
+        cic.ClientID, 
+        cic.InsuranceID, 
+        cic.ExpirationDate
+    FROM ClientInsuranceConfiguration cic
+    JOIN Users u ON cic.ClientID = u.ID
+    JOIN InsuranceMaster im ON cic.InsuranceID = im.ID
     """)
     registrations = cursor.fetchall()
     
-    cursor.execute("SELECT ID, ClientName FROM ClientMaster WHERE IsActive = 1")
+    cursor.execute("SELECT ID, ClientName FROM Users WHERE IsActive = 1 AND Role = 'Client'")
     clients = cursor.fetchall()
-    cursor.execute("SELECT ID, InsauranceName FROM InsauranceMaster WHERE IsActive = 1")
+    cursor.execute("SELECT ID, InsuranceName FROM InsuranceMaster WHERE IsActive = 1")
     insurances = cursor.fetchall()
     
     conn.close()
@@ -57,14 +56,13 @@ def list_registrations(request: Request):
 def create_registration(
     request: Request,
     ClientID: int = Form(...),
-    InsauranceID: int = Form(...),
+    InsuranceID: int = Form(...),
     Username: str = Form(...),
     Password: str = Form(...),
     ExpirationDate: str = Form(...),
-    is_Active: Optional[str] = Form(None)
-
+    IsActive: Optional[str] = Form(None)
 ):
-    is_active_value = 1 if is_Active == "on" else 0
+    is_active_value = 1 if IsActive == "on" else 0
     # Validate username format (alphanumeric, hyphen, underscore only)
     if not re.match(r'^[A-Za-z0-9\-_]+$', Username):
         raise HTTPException(
@@ -110,8 +108,8 @@ def create_registration(
     
     # Check if configuration already exists
     cursor.execute(
-        "SELECT ID FROM ClientInsauranceRegisteration WHERE ClientID = ? AND InsauranceID = ?",
-        (ClientID, InsauranceID)
+        "SELECT ID FROM ClientInsuranceConfiguration WHERE ClientID = ? AND InsuranceID = ?",
+        (ClientID, InsuranceID)
     )
     existing = cursor.fetchone()
     
@@ -124,10 +122,10 @@ def create_registration(
     
     # Insert new configuration
     cursor.execute(
-        """INSERT INTO ClientInsauranceRegisteration 
-           (ClientID, InsauranceID, Username, Password, ExpirationDate, is_Active, Created_on) 
+        """INSERT INTO ClientInsuranceConfiguration 
+           (ClientID, InsuranceID, Username, Password, ExpirationDate, IsActive, CreatedOn) 
            VALUES (?, ?, ?, ?, ?, ?, GETDATE())""",
-        (ClientID, InsauranceID, Username, Password, ExpirationDate, is_active_value)
+        (ClientID, InsuranceID, Username, Password, ExpirationDate, is_active_value)
     )
     
     conn.commit()
@@ -141,21 +139,21 @@ def edit_registration_form(request: Request, id: int):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT r.ID, r.ClientID, r.InsauranceID, r.Username, r.Password, 
-                   r.is_Active, r.ExpirationDate, c.ClientName, i.InsauranceName
-            FROM ClientInsauranceRegisteration r
-            JOIN ClientMaster c ON r.ClientID = c.ID
-            JOIN InsauranceMaster i ON r.InsauranceID = i.ID
-            WHERE r.ID = ?
+            SELECT cic.ID, cic.ClientID, cic.InsuranceID, cic.Username, cic.Password, 
+                   cic.IsActive, cic.ExpirationDate, u.ClientName, im.InsuranceName
+            FROM ClientInsuranceConfiguration cic
+            JOIN Users u ON cic.ClientID = u.ID
+            JOIN InsuranceMaster im ON cic.InsuranceID = im.ID
+            WHERE cic.ID = ?
         """, (id,))
         registration = cursor.fetchone()
         
         if not registration:
             raise HTTPException(status_code=404, detail="Registration not found")
         
-        cursor.execute("SELECT ID, ClientName FROM ClientMaster WHERE IsActive = 1")
+        cursor.execute("SELECT ID, ClientName FROM Users WHERE IsActive = 1 AND Role = 'Client'")
         clients = cursor.fetchall()
-        cursor.execute("SELECT ID, InsauranceName FROM InsauranceMaster WHERE IsActive = 1")
+        cursor.execute("SELECT ID, InsuranceName FROM InsuranceMaster WHERE IsActive = 1")
         insurances = cursor.fetchall()
         
     return templates.TemplateResponse("registration/edit.html", {
@@ -171,15 +169,13 @@ def edit_registration_form(request: Request, id: int):
 def update_registration(
     id: int, 
     ClientID: int = Form(...),
-    InsauranceID: int = Form(...),
+    InsuranceID: int = Form(...),
     Username: str = Form(...),
     Password: str = Form(...),
     ExpirationDate: str = Form(...),
-    is_Active: Optional[str] = Form(None)
-
+    IsActive: Optional[str] = Form(None)
 ):
-    is_active_value = 1 if is_Active == "on" else 0
-    # import pdb; pdb.set_trace()
+    is_active_value = 1 if IsActive == "on" else 0
     # Validate username format
     if not re.match(r'^[A-Za-z0-9\-_]+$', Username):
         raise HTTPException(
@@ -225,9 +221,9 @@ def update_registration(
         
         # Check if the client-insurance combination already exists for another record
         cursor.execute(
-            """SELECT ID FROM ClientInsauranceRegisteration 
-               WHERE ClientID = ? AND InsauranceID = ? AND ID != ?""",
-            (ClientID, InsauranceID, id)
+            """SELECT ID FROM ClientInsuranceConfiguration 
+               WHERE ClientID = ? AND InsuranceID = ? AND ID != ?""",
+            (ClientID, InsuranceID, id)
         )
         existing = cursor.fetchone()
         
@@ -238,23 +234,22 @@ def update_registration(
             )
         
         cursor.execute(
-            """UPDATE ClientInsauranceRegisteration 
-               SET ClientID=?, InsauranceID=?, Username=?, Password=?, 
-                   ExpirationDate=?, is_Active=?
+            """UPDATE ClientInsuranceConfiguration 
+               SET ClientID=?, InsuranceID=?, Username=?, Password=?, 
+                   ExpirationDate=?, IsActive=?
                WHERE ID=?""",
-            (ClientID, InsauranceID, Username, Password, ExpirationDate, is_active_value, id)
+            (ClientID, InsuranceID, Username, Password, ExpirationDate, is_active_value, id)
         )
         
         conn.commit()
     
     return RedirectResponse("/registration/list", status_code=HTTP_303_SEE_OTHER)
 
-
 @router.post("/delete/{id}")
 def delete_registration(id: int):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM ClientInsauranceRegisteration WHERE ID=?", (id,))
+    cursor.execute("DELETE FROM ClientInsuranceConfiguration WHERE ID=?", (id,))
     conn.commit()
     conn.close()
     return RedirectResponse("/registration/list", status_code=HTTP_303_SEE_OTHER)
@@ -265,7 +260,7 @@ def check_configuration(client_id: int, insurance_id: int):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT ID FROM ClientInsauranceRegisteration WHERE ClientID = ? AND InsauranceID = ?",
+        "SELECT ID FROM ClientInsuranceConfiguration WHERE ClientID = ? AND InsuranceID = ?",
         (client_id, insurance_id)
     )
     existing = cursor.fetchone()
@@ -273,13 +268,12 @@ def check_configuration(client_id: int, insurance_id: int):
     
     return {"exists": existing is not None}
 
-
 @router.get("/check-config")
 async def check_configuration(client_id: int, insurance_id: int):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT ID FROM ClientInsauranceRegisteration WHERE ClientID = ? AND InsauranceID = ?",
+        "SELECT ID FROM ClientInsuranceConfiguration WHERE ClientID = ? AND InsuranceID = ?",
         (client_id, insurance_id)
     )
     existing = cursor.fetchone()

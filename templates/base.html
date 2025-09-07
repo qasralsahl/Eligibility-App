@@ -36,12 +36,21 @@
             </li>
             {% endif %}
             
+            
+
             <li>
                 <!-- <h1 class="text-warning">SHOWING CONFIG LINK</h1> -->
                 <a href="/registration/list" class="nav-link {% if request.url.path.startswith('/registration') %}active{% endif %}">
                     <i class="fas fa-cogs"></i> <span>Client Configuration</span>
                 </a>
             </li>
+
+             <li>
+                <a href="#" class="nav-link {% if request.url.path == '/walk-in' %}active{% endif %}">
+                    <i class="fas fa-robot"></i> <span>Walk in Eligibility Check</span>
+                </a>
+            </li>
+
             <li>
                 <a href="/datasource" class="nav-link {% if request.url.path == '/datasource' %}active{% endif %}">
                     <i class="fas fa-robot"></i> <span>Data Source</span>
@@ -49,10 +58,7 @@
             </li>
         </ul>
 
-        <!-- <div class="sidebar-footer mt-auto p-3 text-center">
-            <div class="text-muted small"><span>Logged in as: <strong>{{ username }}</strong></span></div>
-            <a href="/logout" class="btn btn-sm btn-outline-light mt-2">Logout</a>
-        </div> -->
+     
     </nav>
 
     <!-- Content -->

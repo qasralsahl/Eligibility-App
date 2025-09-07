@@ -3,6 +3,7 @@ from jose import jwt
 from jose.exceptions import ExpiredSignatureError, JWTError  # ✅ Import correct exceptions
 from database import get_connection
 from config import SECRET_KEY, ALGORITHM  # ✅ Safe, no circular imports
+from functools import wraps
 
 def get_user_role(username: str):
     with get_connection() as conn:
@@ -32,3 +33,14 @@ def get_user_info(request: Request):
         raise HTTPException(status_code=401, detail="Token expired")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+def require_role(required_role: str):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(request: Request, *args, **kwargs):
+            user_info = get_user_info(request)
+            if not user_info["user_role"] or user_info["user_role"] != required_role:
+                raise HTTPException(status_code=403, detail="Can't access admin routes!")
+            return await func(request, *args, **kwargs)
+        return wrapper
+    return decorator
