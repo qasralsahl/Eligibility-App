@@ -23,17 +23,22 @@
                 <div class="row mb-3">
                     <div class="col-md-4">
                         <label class="form-label">Client*</label>
-                        <select class="form-select" name="ClientID" id="clientSelect" required>
+                        {% if user_role == 'SuperAdmin' %}
+                        <select class="form-select select2" name="ClientID" id="clientSelect" required>
                             <option value="">Select Client</option>
                             {% for client in clients %}
                             <option value="{{ client[0] }}">{{ client[1] }}</option>
                             {% endfor %}
                         </select>
+                        {% else %}
+                        <input type="text" class="form-control" value="{{ username }}" readonly>
+                        <input type="hidden" name="ClientID" value="{{ clients[0][0] }}">
+                        {% endif %}
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Insurance*</label>
-                        <select class="form-select" name="InsuranceID" id="insuranceSelect" required>
-                            <option value="">Select Insurance</option>
+                        <select class="form-select select2" name="InsuranceID" id="insuranceSelect" required>
+                            <option value=""></option>
                             {% for insurance in insurances %}
                             <option value="{{ insurance[0] }}">{{ insurance[1] }}</option>
                             {% endfor %}
@@ -60,7 +65,7 @@
                                required>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Password*</label>
+                        <label class="form-label">Portal Password*</label>
                         <div class="input-group">
                             <input type="password" class="form-control" name="Password" id="passwordField"
                                    pattern="^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$"
@@ -302,6 +307,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 1000);
         });
     }
+    
+
 });
 </script>
+
+<script>
+$(document).ready(function () {
+    // Insurance dropdown
+    $('#insuranceSelect').select2({
+        placeholder: "Select Insurance",
+        allowClear: true,
+        width: '100%'
+    });
+
+    // Client dropdown (only if SuperAdmin)
+    {% if user_role == 'SuperAdmin' %}
+    $('#clientSelect').select2({
+        placeholder: "Select Client",
+        allowClear: true,
+        width: '100%'
+    });
+    {% endif %}
+});
+</script>
+
+
 {% endblock %}

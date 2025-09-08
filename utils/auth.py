@@ -4,6 +4,13 @@ from jose.exceptions import ExpiredSignatureError, JWTError  # ✅ Import correc
 from database import get_connection
 from config import SECRET_KEY, ALGORITHM  # ✅ Safe, no circular imports
 from functools import wraps
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse, RedirectResponse
+from starlette.status import HTTP_303_SEE_OTHER
+import inspect
+
+
+templates = Jinja2Templates(directory="templates")
 
 def get_user_role(username: str):
     with get_connection() as conn:
@@ -15,32 +22,38 @@ def get_user_role(username: str):
 def get_user_info(request: Request):
     token = request.cookies.get("access_token")
     if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
+        # Redirect to login if not authenticated
+        return RedirectResponse("/login", status_code=HTTP_303_SEE_OTHER)
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
         if not username:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
+            return RedirectResponse("/login", status_code=HTTP_303_SEE_OTHER)
         user_role = get_user_role(username)
         if not user_role:
-            raise HTTPException(status_code=403, detail="User role not found")
-
+            return RedirectResponse("/login", status_code=HTTP_303_SEE_OTHER)
         return {"username": username, "user_role": user_role}
-
     except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
+        return RedirectResponse("/login", status_code=HTTP_303_SEE_OTHER)
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        return RedirectResponse("/login", status_code=HTTP_303_SEE_OTHER)
 
 def require_role(required_role: str):
     def decorator(func):
-        @wraps(func)
-        async def wrapper(request: Request, *args, **kwargs):
-            user_info = get_user_info(request)
-            if not user_info["user_role"] or user_info["user_role"] != required_role:
-                raise HTTPException(status_code=403, detail="Can't access admin routes!")
-            return await func(request, *args, **kwargs)
-        return wrapper
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(request: Request, *args, **kwargs):
+                user_info = get_user_info(request)
+                if not user_info.get("user_role") or user_info["user_role"] != required_role:
+                    return templates.TemplateResponse("acessdenied.html", {"request": request}, status_code=403)
+                return await func(request, *args, **kwargs)
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(request: Request, *args, **kwargs):
+                user_info = get_user_info(request)
+                if not user_info.get("user_role") or user_info["user_role"] != required_role:
+                    return templates.TemplateResponse("acessdenied.html", {"request": request}, status_code=403)
+                return func(request, *args, **kwargs)
+            return sync_wrapper
     return decorator

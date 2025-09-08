@@ -67,8 +67,6 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-
-
 def require_role(required_role: str):
     def decorator(func):
         @wraps(func)
@@ -168,7 +166,7 @@ def get_patient_data(user_role: str, username: str):
 @app.get("/")
 def root_redirect():
     """Redirect root path to login"""
-    return RedirectResponse("/login")
+    return RedirectResponse("/dashboard")
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -268,8 +266,11 @@ def logout():
 @app.get("/dashboard")
 def dashboard(request: Request):
     user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     username = user_info["username"]
     user_role = user_info["user_role"]
+    
     
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -367,8 +368,9 @@ def dashboard(request: Request):
 # -------------------- Data Source Route --------------------
 @app.get("/datasource")
 def datasource_page(request: Request):
-    # import pdb; pdb.set_trace()
     user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     username = user_info["username"]
     user_role = user_info["user_role"]
     
@@ -386,6 +388,127 @@ def datasource_page(request: Request):
     })
 
 
+#------------------- Walk-in Eligibility Check Route -------------------------
+
+@app.get("/walk-in", response_class=HTMLResponse)
+def walkin_page(request: Request):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
+
+    username = user_info["username"]
+    user_role = user_info["user_role"]
+
+    # fetch active insurance companies
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT ID, InsuranceCode, InsuranceName FROM InsuranceMaster WHERE IsActive = 1 ORDER BY InsuranceName")
+        insurances = cursor.fetchall()
+
+        # Get last eligibility check for this user (if any)
+        cursor.execute("""
+            SELECT TOP 1 er.EligibilityId, im.InsuranceName, er.CreatedOn, 
+                CASE WHEN ers.ID IS NULL THEN 'Pending'
+                     WHEN ers.Is_Eligible = 1 THEN 'Eligible'
+                     ELSE 'Not Eligible' END as Status
+            FROM EligibilityRequest er
+            LEFT JOIN EligibilityResponse ers ON er.EligibilityId = ers.EligibilityRequestID
+            JOIN InsuranceMaster im ON er.InsuranceID = im.ID
+            JOIN Users u ON er.ClientID = u.ID
+            WHERE u.Username = ?
+            ORDER BY er.CreatedOn DESC
+        """, (username,))
+        last_check = cursor.fetchone()
+
+    insurance_list = [{"id": row[0], "code": row[1], "name": row[2]} for row in insurances]
+
+    return templates.TemplateResponse("walkin.html", {
+        "request": request,
+        "username": username,
+        "user_role": user_role,
+        "insurances": insurance_list,
+        "last_check": last_check
+    })
+
+
+@app.post("/walk-in")
+async def walkin_submit(
+    request: Request,
+    emirates_id: str = Form(...),
+    mobile_no: str = Form(...),
+    clinician_id: str = Form(...),
+    insurance_company: int = Form(...),   # InsuranceMaster.ID
+    appointment_date: str = Form(...),    # from <input type="date">
+):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
+
+    username = user_info["username"]
+    user_role = user_info["user_role"]
+
+    # Get client_id from Users table
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT ID FROM Users WHERE Username = ?", (username,))
+        client_row = cursor.fetchone()
+        client_id = client_row[0] if client_row else None
+
+    if not client_id:
+        return JSONResponse({"status": "error", "message": "Client not found"}, status_code=400)
+
+    # Format appointment datetime for Pydantic model (dd/MM/yyyy HH:mm)
+    formatted_appt = datetime.strptime(appointment_date, "%Y-%m-%d").strftime("%d/%m/%Y %H:%M")
+
+    form_data = {
+        "ClinicDoctorId": clinician_id,
+        "ClinicDoctorLicense": clinician_id,
+        "EmiratesId": emirates_id,
+        "MobileCountryCode": "+971",
+        "MobileNumber": mobile_no,
+        "ClinicLicense": "DEFAULT_LICENSE",
+        "InsuranceCode": str(insurance_company),
+        "ClientName": username,
+        "AppointmentDateTime": formatted_appt,
+    }
+
+    # Validate with Pydantic
+    try:
+        validated = AppointmentRequest(**form_data)
+    except ValidationError as e:
+        return JSONResponse({"status": "error", "errors": e.errors()}, status_code=400)
+
+    # Insert into EligibilityRequest
+    eligibility_id = save_to_eligibility_request_table(validated.dict(), client_id, insurance_company)
+
+    # Get insurance credentials from ClientInsuranceConfiguration
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT Username, Password 
+            FROM ClientInsuranceConfiguration 
+            WHERE ClientID = ? AND InsuranceID = ? AND IsActive = 1
+        """, (client_id, insurance_company))
+        row = cursor.fetchone()
+
+    if not row or not row[0] or not row[1]:
+        return JSONResponse({"status": "error", "message": "No active credentials found for this insurance"}, status_code=400)
+
+    insurance_username, insurance_password = row
+
+    # Trigger Selenium Automation
+    response = trigger_selenium_script(insurance_username, insurance_password, validated.dict())
+
+    # Save response
+    save_to_eligibility_response_table(response, eligibility_id)
+
+    return JSONResponse({
+        "status": "success",
+        "message": "Eligibility check completed",
+        "eligibility_id": eligibility_id,
+        "response": response
+    })
+
 
 # -------------------- File Upload Route --------------------
 @app.post("/upload")
@@ -396,6 +519,8 @@ async def upload_file(
 ):
     """Handle Excel file upload and process patient data"""
     user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse): 
+        return user_info
     username = user_info["username"]
     user_role = user_info["user_role"]
     
@@ -708,6 +833,7 @@ async def upload_file(
 
 
 # -------------------- Pydantic Model --------------------
+
 class AppointmentRequest(BaseModel):
     ClinicDoctorId: str = None
     ClinicDoctorName: str = None

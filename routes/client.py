@@ -8,12 +8,13 @@ from utils.auth import get_user_info as get_current_user_info, require_role # �
 
 templates = Jinja2Templates(directory="templates")
 router = APIRouter(prefix="/client")
-@require_role("SuperAdmin")
-@router.get("/list")
 
+@router.get("/list")
+@require_role("SuperAdmin")
 def client_list(request: Request):
     user_info = get_current_user_info(request)  # ✅ extract username and role
-
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT ID, ClientName, IsActive, CreatedOn FROM Users WHERE Role = 'Client'")
@@ -30,6 +31,8 @@ def client_list(request: Request):
 @require_role("SuperAdmin")
 def create_client_form(request: Request):
     user_info = get_current_user_info(request)  # ✅ extract username and role
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     return templates.TemplateResponse("client/create.html", {
         "request": request,
         "username": user_info["username"],    # ✅ passed to base.html
@@ -38,7 +41,10 @@ def create_client_form(request: Request):
 
 @router.post("/create")
 @require_role("SuperAdmin")
-def create_client(ClientName: str = Form(...), IsActive: bool = Form(False)):
+def create_client(ClientName: str = Form(...), IsActive: bool = Form(False), request: Request = None):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -52,6 +58,8 @@ def create_client(ClientName: str = Form(...), IsActive: bool = Form(False)):
 @require_role("SuperAdmin")
 def edit_client_form(request: Request, id: int):
     user_info = get_current_user_info(request)  # ✅ extract username and role
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT ID, ClientName, IsActive FROM Users WHERE ID = ? AND Role = 'Client'", (id,))
@@ -64,7 +72,10 @@ def edit_client_form(request: Request, id: int):
 
 @router.post("/edit/{id}")
 @require_role("SuperAdmin")
-def update_client(id: int, ClientName: str = Form(...), IsActive: bool = Form(False)):
+def update_client(id: int, ClientName: str = Form(...), IsActive: bool = Form(False), request: Request = None):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -76,7 +87,10 @@ def update_client(id: int, ClientName: str = Form(...), IsActive: bool = Form(Fa
 
 @router.post("/delete/{id}")
 @require_role("SuperAdmin")
-def delete_client(id: int):
+def delete_client(id: int, request: Request = None):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     # Check if client has any insurance mappings before deletion
     with get_connection() as conn:
         cursor = conn.cursor()

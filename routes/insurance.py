@@ -14,6 +14,8 @@ router = APIRouter(prefix="/insurance")
 @require_role("SuperAdmin")
 def list_insurance(request: Request):
     user_info = get_current_user_info(request)  # ✅ extract username and role
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT ID, InsuranceCode, InsuranceName, IsActive, CreatedOn FROM InsuranceMaster")
@@ -31,6 +33,8 @@ def list_insurance(request: Request):
 @require_role("SuperAdmin")
 def create_insurance_form(request: Request):
     user_info = get_current_user_info(request)  # ✅ extract username and role
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     return templates.TemplateResponse("insurance/create.html", {
         "request": request,
         "username": user_info["username"],      # ✅ Pass to template
@@ -39,7 +43,10 @@ def create_insurance_form(request: Request):
 
 @router.post("/create")
 @require_role("SuperAdmin")
-def create_insurance(InsuranceCode: str = Form(...), InsuranceName: str = Form(...)):
+def create_insurance(request: Request, InsuranceCode: str = Form(...), InsuranceName: str = Form(...)):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO InsuranceMaster (InsuranceCode, InsuranceName) VALUES (?, ?)", (InsuranceCode, InsuranceName))
@@ -51,6 +58,8 @@ def create_insurance(InsuranceCode: str = Form(...), InsuranceName: str = Form(.
 @require_role("SuperAdmin")
 def edit_insurance_form(request: Request, id: int):
     user_info = get_current_user_info(request)  # ✅ extract username and role
+    if isinstance(user_info, RedirectResponse):
+        return user_info 
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT ID, InsuranceCode, InsuranceName, IsActive FROM InsuranceMaster WHERE ID = ?", (id,))
@@ -64,7 +73,10 @@ def edit_insurance_form(request: Request, id: int):
 
 @router.post("/edit/{id}")
 @require_role("SuperAdmin")
-def update_insurance(id: int, InsuranceCode: str = Form(...), InsuranceName: str = Form(...),  IsActive: str = Form("off")):
+def update_insurance(request: Request, id: int, InsuranceCode: str = Form(...), InsuranceName: str = Form(...),  IsActive: str = Form("off")):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     is_active_flag = 1 if IsActive == 'on' else 0
     conn = get_connection()
     cursor = conn.cursor()
@@ -78,7 +90,10 @@ def update_insurance(id: int, InsuranceCode: str = Form(...), InsuranceName: str
 
 @router.post("/delete/{id}")
 @require_role("SuperAdmin")
-def delete_insurance(id: int):
+def delete_insurance(request: Request, id: int):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     conn = get_connection()
     cursor = conn.cursor()
     

@@ -14,6 +14,8 @@ router = APIRouter(prefix="/registration")
 @router.get("/list")
 def list_registrations(request: Request):
     user_info = get_current_user_info(request)  # ✅ Get username and role
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -62,6 +64,10 @@ def create_registration(
     ExpirationDate: str = Form(...),
     IsActive: Optional[str] = Form(None)
 ):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
+    
     is_active_value = 1 if IsActive == "on" else 0
     # Validate username format (alphanumeric, hyphen, underscore only)
     if not re.match(r'^[A-Za-z0-9\-_]+$', Username):
@@ -136,6 +142,8 @@ def create_registration(
 @router.get("/edit/{id}")
 def edit_registration_form(request: Request, id: int):
     user_info = get_current_user_info(request)  # ✅ extract username and role
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -167,6 +175,7 @@ def edit_registration_form(request: Request, id: int):
 
 @router.post("/edit/{id}")
 def update_registration(
+    request: Request,
     id: int, 
     ClientID: int = Form(...),
     InsuranceID: int = Form(...),
@@ -175,6 +184,9 @@ def update_registration(
     ExpirationDate: str = Form(...),
     IsActive: Optional[str] = Form(None)
 ):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     is_active_value = 1 if IsActive == "on" else 0
     # Validate username format
     if not re.match(r'^[A-Za-z0-9\-_]+$', Username):
@@ -246,7 +258,10 @@ def update_registration(
     return RedirectResponse("/registration/list", status_code=HTTP_303_SEE_OTHER)
 
 @router.post("/delete/{id}")
-def delete_registration(id: int):
+def delete_registration(request: Request, id: int):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM ClientInsuranceConfiguration WHERE ID=?", (id,))
@@ -256,7 +271,10 @@ def delete_registration(id: int):
 
 # Additional endpoint to check if a configuration already exists
 @router.get("/check-config")
-def check_configuration(client_id: int, insurance_id: int):
+def check_configuration(request: Request, client_id: int, insurance_id: int):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -269,7 +287,10 @@ def check_configuration(client_id: int, insurance_id: int):
     return {"exists": existing is not None}
 
 @router.get("/check-config")
-async def check_configuration(client_id: int, insurance_id: int):
+async def check_configuration(request: Request, client_id: int, insurance_id: int):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
