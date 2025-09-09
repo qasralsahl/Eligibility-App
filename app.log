@@ -298,3 +298,15 @@ Stacktrace:
 2025-09-09 01:19:42,331 [INFO] get_clients - Role: Client, Username: zahraclinic, Found: 0 clients
 2025-09-09 01:19:45,085 [INFO] get_clients - Role: Client, Username: zahraclinic, Found: 0 clients
 2025-09-09 01:20:16,360 [INFO] get_clients - Role: Client, Username: zahraclinic, Found: 0 clients
+2025-09-09 20:06:13,932 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:13:51,867 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:40:03,618 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:44:48,618 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:45:11,199 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:48:16,135 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:48:24,133 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:50:17,052 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:50:24,123 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:51:43,530 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 21:53:16,308 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 1 clients
+2025-09-09 22:31:54,667 [INFO] get_clients - Role: Client, Username: zahraclinic, Found: 1 clients

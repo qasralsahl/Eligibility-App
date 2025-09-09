@@ -38,6 +38,7 @@
             {% endif %}
 
             <form method="post" action="/upload" enctype="multipart/form-data" id="uploadForm">
+                <input type="hidden" name="client_id" value="{{ clients[0][0] }}">
                 <div class="row mb-3">
                     
                     <div class="col-md-6">

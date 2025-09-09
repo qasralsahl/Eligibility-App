@@ -23,8 +23,8 @@ from routes import insurance
 from routes import client
 from routes import registration
 
-from config import SECRET_KEY, ALGORITHM  # ✅ Safe, no circular imports
-from utils.auth import get_user_info as get_current_user_info  # ✅ centralized auth
+from config import SECRET_KEY, ALGORITHM 
+from utils.auth import get_user_info as get_current_user_info  
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
@@ -131,7 +131,7 @@ def get_patient_data(user_role: str, username: str):
                     u.ClientName as ClientName,
                     CASE 
                         WHEN ers.ID IS NULL THEN 'Pending' 
-                        WHEN ers.Is_Eligible = 1 THEN 'Eligible' 
+                        WHEN ers.Is_Eligible = 'Eligible' THEN 'Eligible' 
                         ELSE 'Not Eligible' 
                     END as Status,
                     er.CreatedOn as UploadedDate
@@ -532,32 +532,30 @@ async def walkin_submit(
 # -------------------- File Upload Route --------------------
 @app.post("/upload")
 async def upload_file(
-    request: Request, 
+    request: Request,
     client_id: int = Form(...),
     file: UploadFile = File(...)
 ):
-    """Handle Excel file upload and process patient data"""
+    """Upload Excel file -> validate -> store records in UploadHistory"""
     user_info = get_current_user_info(request)
-    if isinstance(user_info, RedirectResponse): 
+    if isinstance(user_info, RedirectResponse):
         return user_info
+
     username = user_info["username"]
     user_role = user_info["user_role"]
-    
-    
-    
-    # Validate file type
-    if not file.filename.endswith(('.xlsx', '.xls')):
+
+    # ---- Validate file type ----
+    if not file.filename.endswith((".xlsx", ".xls")):
         return templates.TemplateResponse("datasource.html", {
             "request": request,
             "username": username,
             "user_role": user_role,
-            "error": "Only Excel files are allowed",
+            "error": "Only Excel files (.xlsx, .xls) are allowed",
             "clients": get_clients(user_role, username),
-            "upload_history": get_upload_history(user_role, username),
-            "patient_data": get_patient_data(user_role, username)
+            "upload_history": get_upload_history(user_role, username)
         })
-    
-    # Read file content once and validate size
+
+    # ---- Read file content & check size ----
     try:
         file_content = await file.read()
         file_size = len(file_content)
@@ -568,288 +566,126 @@ async def upload_file(
             "user_role": user_role,
             "error": f"Error reading file: {str(e)}",
             "clients": get_clients(user_role, username),
-            "upload_history": get_upload_history(user_role, username),
-            "patient_data": get_patient_data(user_role, username)
+            "upload_history": get_upload_history(user_role, username)
         })
-    
-    # Validate file size (10MB max)
-    if file_size > 10 * 1024 * 1024:
+
+    if file_size > 10 * 1024 * 1024:  # 10MB
         return templates.TemplateResponse("datasource.html", {
             "request": request,
             "username": username,
             "user_role": user_role,
             "error": "File size exceeds 10MB limit",
             "clients": get_clients(user_role, username),
-            "upload_history": get_upload_history(user_role, username),
-            "patient_data": get_patient_data(user_role, username)
+            "upload_history": get_upload_history(user_role, username)
         })
-    
-    # Save file to upload directory
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+
+    # ---- Load Excel ----
     try:
-        with open(file_path, "wb") as buffer:
-            buffer.write(file_content)
-    except Exception as e:
-        return templates.TemplateResponse("datasource.html", {
-            "request": request,
-            "username": username,
-            "user_role": user_role,
-            "error": f"Error saving file: {str(e)}",
-            "clients": get_clients(user_role, username),
-            "upload_history": get_upload_history(user_role, username),
-            "patient_data": get_patient_data(user_role, username)
-        })
-    # Save upload record to database
-    try:
-        with get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO UploadHistory (ClientID, FileName, FileSize, UploadDate) VALUES (?, ?, ?, GETDATE())",
-                (client_id, file.filename, file_size)
-            )
-            conn.commit()
-    except Exception as e:
-        os.remove(file_path)  # Clean up file if DB operation fails
-        return templates.TemplateResponse("datasource.html", {
-            "request": request,
-            "username": username,
-            "user_role": user_role,
-            "error": f"Error saving upload record: {str(e)}",
-            "clients": get_clients(user_role, username),
-            "upload_history": get_upload_history(user_role, username),
-            "patient_data": get_patient_data(user_role, username)
-        })
-    
-    # Process the Excel file
-    try:
-        # Read the Excel file with multiple engine fallbacks for better compatibility
+        df = pd.read_excel(io.BytesIO(file_content), engine="openpyxl")
+    except Exception:
         try:
-            # First try with openpyxl (better for .xlsx files)
-            df = pd.read_excel(io.BytesIO(file_content), engine='openpyxl')
-        except Exception as openpyxl_error:
-            try:
-                # Fallback to xlrd (better for .xls files)
-                df = pd.read_excel(io.BytesIO(file_content), engine='xlrd')
-            except Exception as xlrd_error:
-                try:
-                    # Final fallback - let pandas auto-detect
-                    df = pd.read_excel(io.BytesIO(file_content))
-                except Exception as auto_error:
-                    raise Exception(f"Failed to read Excel file. Openpyxl error: {openpyxl_error}, Xlrd error: {xlrd_error}, Auto error: {auto_error}")
-        
-        # Validate that the file is not empty
-        if df.empty:
-            os.remove(file_path)
+            df = pd.read_excel(io.BytesIO(file_content), engine="xlrd")
+        except Exception as e:
             return templates.TemplateResponse("datasource.html", {
                 "request": request,
                 "username": username,
                 "user_role": user_role,
-                "error": "Uploaded file is empty or contains no data",
+                "error": f"Failed to read Excel file: {str(e)}",
                 "clients": get_clients(user_role, username),
-                "upload_history": get_upload_history(user_role, username),
-                "patient_data": get_patient_data(user_role, username)
+                "upload_history": get_upload_history(user_role, username)
             })
-        
-        # Get client name for processing
-        try:
-            with get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT ClientName FROM Users WHERE ID = ?", (client_id,))
-                client_name_result = cursor.fetchone()
-                client_name = client_name_result[0] if client_name_result else "Unknown"
-        except Exception as e:
-            client_name = "Unknown"
-        
-        # Initialize processing variables
-        grid_data = []
-        processed_count = 0
-        error_messages = []
-        
-        # Loop through all rows in Excel
-        for index, row in df.iterrows():
-            try:
-                data = row.to_dict()
-                print(f"[DEBUG] Row {index+2} InsuranceCode: {data.get('InsuranceCode')}")
-                
-                # Clean data: convert NaN/None to empty strings
-                for key, value in data.items():
-                    if pd.isna(value):
-                        data[key] = ""
-                    elif isinstance(value, (int, float)):
-                        data[key] = str(value).strip()
-                    elif isinstance(value, str):
-                        data[key] = value.strip()
-                
-                # Add ClientName to data since we know it from the form
-                data["ClientName"] = client_name
-                
-                # ---------------- Step 2: Validate required fields ----------------
-                required_fields = [
-                    "ClinicDoctorId", "ClinicDoctorName", "ClinicDoctorLicense", "EmiratesId",
-                    "MobileCountryCode", "MobileNumber", "PatientFirstName", "PatientLastName",
-                    "ClinicLicense", "InsuranceCode", "DepartmentName", "SpecialityName",
-                    "AppointmentDateTime"
-                ]
-                
-                missing = [f for f in required_fields if not data.get(f)]
-                if missing:
-                    error_messages.append(f"Row {index+2}: Missing required fields: {', '.join(missing)}")
-                    continue
-                
-                # ---------------- Step 3: Lookup Client + Insurance ----------------
-                with get_connection() as conn:
-                    cursor = conn.cursor()
-                    
-                    # Validate client
-                    cursor.execute("SELECT ID FROM Users WHERE ClientName=? AND IsActive=1 AND Role='Client'", (data["ClientName"],))
-                    client_row = cursor.fetchone()
-                    if not client_row:
-                        error_messages.append(f"Row {index+2}: Client '{data['ClientName']}' not found or inactive.")
-                        continue
-                    client_id_db = client_row[0]
-                    
-                    # Validate insurance
-                    cursor.execute("SELECT ID, InsuranceCode FROM InsuranceMaster WHERE InsuranceCode=? AND IsActive=1", (data["InsuranceCode"],))
-                    ins_row = cursor.fetchone()
-                    if not ins_row:
-                        error_messages.append(f"Row {index+2}: Insurance code '{data['InsuranceCode']}' not found or inactive.")
-                        continue
-                    insurance_id, insurance_code = ins_row
-                    
-                    # Get portal credentials
-                    cursor.execute("""
-                        SELECT Username, Password FROM ClientInsuranceConfiguration 
-                        WHERE ClientID=? AND InsuranceID=? AND IsActive=1
-                    """, (client_id_db, insurance_id))
-                    cred_row = cursor.fetchone()
-                    if not cred_row:
-                        error_messages.append(f"Row {index+2}: Active registration not found for client-insurance combination.")
-                        continue
-                    portal_username, portal_password = cred_row
-                # import pdb; pdb.set_trace()
-                
-                # ---------------- Step 4: Insert into EligibilityRequest ----------------
-                insert_request_query = """
-                INSERT INTO EligibilityRequest (
-                    ClinicDoctorId, ClinicDoctorName, ClinicDoctorLicense, EmiratesId,
-                    MobileCountryCode, MobileNumber, PatientFirstName, PatientLastName,
-                    ClinicLicense, InsuranceID, ClientID, DepartmentName, SpecialityName,
-                    AppointmentDateTime, CreatedOn
-                )
-                OUTPUT INSERTED.EligibilityId
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
-                """
-                values = (
-                    data["ClinicDoctorId"], data["ClinicDoctorName"], data["ClinicDoctorLicense"], data["EmiratesId"],
-                    data["MobileCountryCode"], data["MobileNumber"], data["PatientFirstName"], data["PatientLastName"],
-                    data["ClinicLicense"], insurance_id, client_id_db, data["DepartmentName"], data["SpecialityName"],
-                    data["AppointmentDateTime"]
-                )
-                
-                with get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute(insert_request_query, values)
-                    eligibility_request_id = cursor.fetchone()[0]
-                    conn.commit()
-                
-                # ---------------- Step 5: Run Selenium Automation ----------------
-                loop = asyncio.get_event_loop()
-                response_data = await loop.run_in_executor(
-                    executor,
-                    trigger_selenium_script,
-                    portal_username,
-                    portal_password,
-                    data
-                )
-                
-                if not response_data:
-                    error_messages.append(f"Row {index+2}: Failed to trigger automation script.")
-                    continue
-                
-                # ---------------- Step 6: Insert into EligibilityResponse ----------------
-                member_policy = response_data.get("Member_Policy_Details", {}) or {}
-                
-                insert_response_query = """
-                INSERT INTO EligibilityResponse (
-                    EligibilityRequestID, Reference_No, Request_Date, Effective_From, Effective_To, Effective_At,
-                    Is_Eligible, Coverage_Details, Notes, Emirates_ID, 
-                    TPA_Member_ID, Emirates_ID_Member, DHA_Member_ID, DOB, Gender, 
-                    Sub_Group, Category, Policy_Number, Client_Number, Policy_Authority, CreatedOn
-                ) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
-                """
-                
-                response_values = (
-                    eligibility_request_id,
-                    response_data.get("Reference_No"),
-                    response_data.get("Request_Date"),
-                    response_data.get("Effective_From"),
-                    response_data.get("Effective_To"),
-                    response_data.get("Effective_At"),
-                    response_data.get("Is_Eligible"),
-                    response_data.get("Coverage_Details"),
-                    response_data.get("Notes"),
-                    response_data.get("Emirates_ID"),
-                    member_policy.get("TPA_Member_ID"),
-                    member_policy.get("Emirates_ID"),
-                    member_policy.get("DHA_Member_ID"),
-                    member_policy.get("DOB"),
-                    member_policy.get("Gender"),
-                    member_policy.get("Sub_Group"),
-                    member_policy.get("Category"),
-                    member_policy.get("Policy_Number"),
-                    member_policy.get("Client_Number"),
-                    member_policy.get("Policy_Authority"),
-                )
-                
-                with get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute(insert_response_query, response_values)
-                    conn.commit()
-                
-                processed_count += 1
-                
-            except Exception as e:
-                error_messages.append(f"Row {index+2}: {str(e)}")
-                continue
-        
-        # Prepare success/error message
-        if processed_count > 0:
-            message = f"Successfully processed {processed_count} records"
-            if error_messages:
-                message += f". {len(error_messages)} records had errors."
-        else:
-            message = "No records were processed successfully."
-        
-        # Get updated patient data for display using the updated query
-        updated_patient_data = get_patient_data(user_role, username)
-        
+
+    # ---- Validate required columns ----
+    required_cols = [
+        "ClinicDoctorLicense", "MemberId", "EmiratesId",
+        "MobileNumber", "ClinicLicense", "InsuranceCode", "AppointmentDateTime"
+    ]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
         return templates.TemplateResponse("datasource.html", {
             "request": request,
             "username": username,
             "user_role": user_role,
-            "message": message,
+            "error": f"Missing required columns: {', '.join(missing_cols)}",
             "clients": get_clients(user_role, username),
-            "upload_history": get_upload_history(user_role, username),
-            "patient_data": updated_patient_data,
-            "error_details": error_messages if error_messages else None
-        })
-        
-    except Exception as e:
-        # Clean up file on error
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        
-        return templates.TemplateResponse("datasource.html", {
-            "request": request,
-            "username": username,
-            "user_role": user_role,
-            "error": f"Error processing file: {str(e)}",
-            "clients": get_clients(user_role, username),
-            "upload_history": get_upload_history(user_role, username),
-            "patient_data": get_patient_data(user_role, username)
+            "upload_history": get_upload_history(user_role, username)
         })
 
+    # ---- Insert records into UploadHistory ----
+    inserted_count = 0
+    errors = []
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            for idx, row in df.iterrows():
+                try:
+                    cursor.execute("""
+                        INSERT INTO UploadHistory (
+                            ClientID, FileName, FileSize, UploadDate,
+                            ClinicDoctorId, ClinicDoctorName, ClinicDoctorLicense,
+                            EmiratesId, MobileCountryCode, MobileNumber,
+                            PatientFirstName, PatientLastName, ClinicLicense,
+                            InsuranceCode, DepartmentName, SpecialityName,
+                            AppointmentDateTime, MemberId
+                        )
+                        VALUES (?, ?, ?, GETDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        client_id,
+                        file.filename,
+                        file_size,
+                        row.get("ClinicDoctorId", None),
+                        row.get("ClinicDoctorName", None),
+                        row.get("ClinicDoctorLicense", None),
+                        row.get("EmiratesId", None),
+                        row.get("MobileCountryCode", None),
+                        row.get("MobileNumber", None),
+                        row.get("PatientFirstName", None),
+                        row.get("PatientLastName", None),
+                        row.get("ClinicLicense", None),
+                        row.get("InsuranceCode", None),
+                        row.get("DepartmentName", None),
+                        row.get("SpecialityName", None),
+                        row.get("AppointmentDateTime", None),
+                        row.get("MemberId", None)
+                    ))
+                    inserted_count += 1
+                except Exception as e:
+                    errors.append(f"Row {idx+2}: {str(e)}")
+            conn.commit()
+    except Exception as e:
+        return templates.TemplateResponse("datasource.html", {
+            "request": request,
+            "username": username,
+            "user_role": user_role,
+            "error": f"Database error: {str(e)}",
+            "clients": get_clients(user_role, username),
+            "upload_history": get_upload_history(user_role, username)
+        })
+
+    # ---- Prepare message ----
+    if inserted_count > 0:
+        message = f"✅ Successfully inserted {inserted_count} records into UploadHistory."
+        if errors:
+            message += f" ⚠ {len(errors)} rows had errors."
+        return templates.TemplateResponse("datasource.html", {
+            "request": request,
+            "username": username,
+            "user_role": user_role,
+            "success": message,   # Bootstrap success alert
+            "error_details": errors if errors else None,
+            "clients": get_clients(user_role, username),
+            "upload_history": get_upload_history(user_role, username)
+        })
+    else:
+        return templates.TemplateResponse("datasource.html", {
+            "request": request,
+            "username": username,
+            "user_role": user_role,
+            "error": "❌ No records were inserted.",
+            "error_details": errors if errors else None,
+            "clients": get_clients(user_role, username),
+            "upload_history": get_upload_history(user_role, username)
+        })
 
 # -------------------- Pydantic Model --------------------
 
@@ -858,13 +694,14 @@ class AppointmentRequest(BaseModel):
     ClinicDoctorName: str = None
     ClinicDoctorLicense: str
     EmiratesId: str
-    MobileCountryCode: str
+    MemberId: str
+    MobileCountryCode: str = "+971"
     MobileNumber: str
     PatientFirstName: str = None
     PatientLastName: str = None
     ClinicLicense: str
     InsuranceCode: str
-    ClientName: str
+    ClientName: str = None
     DepartmentName: str = None
     SpecialityName: str = None
     AppointmentDateTime: str

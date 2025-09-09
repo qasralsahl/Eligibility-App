@@ -64,6 +64,7 @@ def create_registration(
     ExpirationDate: str = Form(...),
     IsActive: Optional[str] = Form(None)
 ):
+    # import pdb; pdb.set_trace()
     user_info = get_current_user_info(request)
     if isinstance(user_info, RedirectResponse):
         return user_info

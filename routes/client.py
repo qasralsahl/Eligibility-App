@@ -4,10 +4,13 @@ from starlette.status import HTTP_303_SEE_OTHER
 from fastapi.templating import Jinja2Templates
 from database import get_connection
 from utils.auth import get_user_info as get_current_user_info, require_role # ✅ renamed for clarity
-
+import bcrypt
 
 templates = Jinja2Templates(directory="templates")
 router = APIRouter(prefix="/client")
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 @router.get("/list")
 @require_role("SuperAdmin")
@@ -41,15 +44,24 @@ def create_client_form(request: Request):
 
 @router.post("/create")
 @require_role("SuperAdmin")
-def create_client(ClientName: str = Form(...), IsActive: bool = Form(False), request: Request = None):
+def create_client(
+    request: Request,
+    ClientName: str = Form(...),
+    Username: str = Form(...),
+    Password: str = Form(...),
+    Role: str = Form(...),
+    IsActive: bool = Form(False)
+):
     user_info = get_current_user_info(request)
     if isinstance(user_info, RedirectResponse):
         return user_info
+    # Hash password before storing (use your existing hash function)
+    hashed_password = hash_password(Password)
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO Users (ClientName, IsActive, Role) VALUES (?, ?, 'Client')",
-            (ClientName, int(IsActive))
+            "INSERT INTO Users (ClientName, Username, Password, Role, IsActive) VALUES (?, ?, ?, ?, ?)",
+            (ClientName, Username, hashed_password, Role, int(IsActive))
         )
         conn.commit()
     return RedirectResponse("/client/list", status_code=HTTP_303_SEE_OTHER)
@@ -57,31 +69,47 @@ def create_client(ClientName: str = Form(...), IsActive: bool = Form(False), req
 @router.get("/edit/{id}")
 @require_role("SuperAdmin")
 def edit_client_form(request: Request, id: int):
-    user_info = get_current_user_info(request)  # ✅ extract username and role
-    if isinstance(user_info, RedirectResponse):
-        return user_info
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT ID, ClientName, IsActive FROM Users WHERE ID = ? AND Role = 'Client'", (id,))
-        client = cursor.fetchone()
-    return templates.TemplateResponse("client/edit.html", {
-        "request": request, "client": client,
-        "username": user_info["username"],      # ✅ Pass to
-        "user_role": user_info["user_role"]     # ✅ Pass to template
-        })
-
-@router.post("/edit/{id}")
-@require_role("SuperAdmin")
-def update_client(id: int, ClientName: str = Form(...), IsActive: bool = Form(False), request: Request = None):
     user_info = get_current_user_info(request)
     if isinstance(user_info, RedirectResponse):
         return user_info
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE Users SET ClientName = ?, IsActive = ? WHERE ID = ? AND Role = 'Client'",
-            (ClientName, int(IsActive), id)
-        )
+        cursor.execute("SELECT ID, ClientName, Username, Password, Role, IsActive, CreatedOn FROM Users WHERE ID = ?", (id,))
+        client = cursor.fetchone()
+    return templates.TemplateResponse("client/edit.html", {
+        "request": request, "client": client,
+        "username": user_info["username"],
+        "user_role": user_info["user_role"]
+    })
+
+@router.post("/edit/{id}")
+@require_role("SuperAdmin")
+def update_client(
+    request: Request,
+    id: int,
+    ClientName: str = Form(...),
+    Username: str = Form(...),
+    Password: str = Form(""),
+    Role: str = Form(...),
+    IsActive: bool = Form(False)
+):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if Password:
+            hashed_password = hash_password(Password)
+            cursor.execute(
+                "UPDATE Users SET ClientName = ?, Username = ?, Password = ?, Role = ?, IsActive = ? WHERE ID = ?",
+                (ClientName, Username, hashed_password, Role, int(IsActive), id)
+            )
+        else:
+            # Keep current password
+            cursor.execute(
+                "UPDATE Users SET ClientName = ?, Username = ?, Role = ?, IsActive = ? WHERE ID = ?",
+                (ClientName, Username, Role, int(IsActive), id)
+            )
         conn.commit()
     return RedirectResponse("/client/list", status_code=HTTP_303_SEE_OTHER)
 
