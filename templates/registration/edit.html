@@ -27,7 +27,7 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Insurance*</label>
-                        <select class="form-select" name="InsauranceID" required>
+                        <select class="form-select" name="InsuranceID" required>
                             <option value="">Select Insurance</option>
                             {% for insurance in insurances %}
                             <option value="{{ insurance[0] }}" {% if insurance[0] == registration[2] %}selected{% endif %}>{{ insurance[1] }}</option>
@@ -37,7 +37,7 @@
                     <div class="col-md-4">
                         <label class="form-label">Status</label>
                         <div class="form-check form-switch mt-2">
-                            <input class="form-check-input" type="checkbox" name="is_Active" id="statusToggle" {% if registration[5] == 1 or registration[5] == True %}checked{% endif %}>
+                            <input class="form-check-input" type="checkbox" name="IsActive" id="statusToggle" {% if registration[5] == 1 or registration[5] == True %}checked{% endif %}>
                             <label class="form-check-label" for="statusToggle">Active</label>
                         </div>
                     </div>
