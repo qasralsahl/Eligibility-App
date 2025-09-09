@@ -294,14 +294,16 @@ class EligibilityChecker:
 
     def run(self, eid, mobile_num, service_network):
         try:
-            self.login_user()
-            self.ensure_page_loaded()
-            self.check_login_status()
-            self.fill_eligibility_form(eid, mobile_num, service_network)
-            response = self.gether_info(eid)
-            return response
-            time.sleep(5)  # Allow page to respond
+            if service_network.lower() in ('nas', 'neuron'):
+                self.login_user()
+                self.ensure_page_loaded()
+                self.check_login_status()
+                self.fill_eligibility_form(eid, mobile_num, service_network)
+                response = self.gether_info(eid)
+                return response
+            else:
+                return {"status": "error", "message": "Service network must be either 'NAS' or 'Neuron'."}
         except Exception as e:
-            print(f"❌ Automation error: {e}")
+            return {"status": "error", "message": str(e)}
         finally:
             self.driver.close()

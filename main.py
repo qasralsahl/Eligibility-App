@@ -15,6 +15,7 @@ from jose import jwt
 from functools import wraps
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 # Local imports
 from database import get_connection
@@ -516,7 +517,18 @@ async def walkin_submit(
     response = trigger_selenium_script(insurance_username, insurance_password, validated.dict())
 
     # ✅ Save response
-    save_to_eligibility_response_table(response, eligibility_id)
+    if response.get("status") == "error":
+        print("❌ Skipping save, error:", response["message"])
+        return RedirectResponse(
+            url=f"/walk-in?message=Error:+{response['message']}",
+            status_code=303
+        )
+    else:
+        save_to_eligibility_response_table(response, eligibility_id)
+        return RedirectResponse(
+        url=f"/walk-in?message=Successfully+processed+eligibility+request",
+        status_code=303
+    )
 
     # return JSONResponse({
     #     "status": "success",
@@ -524,10 +536,7 @@ async def walkin_submit(
     #     "eligibility_id": eligibility_id,
     #     "response": response
     # })
-    return RedirectResponse(
-        url=f"/walk-in?message=Successfully+processed+eligibility+request",
-        status_code=303
-    )
+    
 
 # -------------------- File Upload Route --------------------
 @app.post("/upload")
@@ -694,7 +703,8 @@ class AppointmentRequest(BaseModel):
     ClinicDoctorName: str = None
     ClinicDoctorLicense: str
     EmiratesId: str
-    MemberId: str
+    # MemberId: str
+    MemberId: Optional[str] = None
     MobileCountryCode: str = "+971"
     MobileNumber: str
     PatientFirstName: str = None
@@ -733,8 +743,23 @@ def trigger_selenium_script(username, password, data: dict):
     """Run Selenium eligibility checker"""
     eid = data["EmiratesId"]
     mobile_num = data["MobileNumber"]
+    
     service_network = data["InsuranceCode"]
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT InsuranceCode FROM InsuranceMaster WHERE ID = ?", 
+            (int(service_network),)
+        )
+        row = cursor.fetchone()
 
+        if not row:
+            return {"status": "error", "message": "Invalid Insurance ID"}
+
+        service_network = row[0]   # ✅ now it's just "NAS"
+
+    # select InsuranceCode from InsuranceMaster where ID = ty
+    # import pdb; pdb.set_trace()
     checker = EligibilityChecker(username, password)
     response = checker.run(eid, mobile_num, service_network)
     return response
@@ -776,6 +801,20 @@ def save_to_eligibility_request_table(data: dict, client_id: int, insurance_id: 
 
 def save_to_eligibility_response_table(data: dict, eligibility_request_id: int):
     member_policy = data.get("Member_Policy_Details", {}) or {}
+
+    def fix_date(val):
+        if val is None or val == "" or str(val).lower() in ["none", "n/a", "invalid"]:
+            return None
+        if isinstance(val, datetime):
+            return val.strftime('%Y-%m-%d %H:%M:%S')
+        # Try to parse string to datetime, then format
+        for fmt in ("%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d-%b-%Y %H:%M:%S", "%d-%b-%Y", "%d-%b-%Y %H:%M"):
+            try:
+                return datetime.strptime(str(val), fmt).strftime('%Y-%m-%d %H:%M:%S')
+            except Exception:
+                continue
+        return None
+
     query = """
     INSERT INTO EligibilityResponse (
         EligibilityRequestID, Reference_No, Request_Date, Effective_From, Effective_To, Effective_At,
@@ -788,9 +827,9 @@ def save_to_eligibility_response_table(data: dict, eligibility_request_id: int):
     values = (
         eligibility_request_id,
         data.get("Reference_No"),
-        data.get("Request_Date"),
-        data.get("Effective_From"),
-        data.get("Effective_To"),
+        fix_date(data.get("Request_Date")),
+        fix_date(data.get("Effective_From")),
+        fix_date(data.get("Effective_To")),
         data.get("Effective_At"),
         data.get("Is_Eligible"),
         data.get("Coverage_Details"),
@@ -799,7 +838,7 @@ def save_to_eligibility_response_table(data: dict, eligibility_request_id: int):
         member_policy.get("TPA_Member_ID"),
         member_policy.get("Emirates_ID"),
         member_policy.get("DHA_Member_ID"),
-        member_policy.get("DOB"),
+        fix_date(member_policy.get("DOB")),
         member_policy.get("Gender"),
         member_policy.get("Sub_Group"),
         member_policy.get("Category"),
