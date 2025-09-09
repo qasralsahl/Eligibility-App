@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, validator
 from starlette.status import HTTP_303_SEE_OTHER
 from datetime import datetime, timedelta
+from pydantic import ValidationError
 import pandas as pd
 import asyncio
 import io
@@ -391,7 +392,7 @@ def datasource_page(request: Request):
 #------------------- Walk-in Eligibility Check Route -------------------------
 
 @app.get("/walk-in", response_class=HTMLResponse)
-def walkin_page(request: Request):
+def walkin_page(request: Request, message: str = None):
     user_info = get_current_user_info(request)
     if isinstance(user_info, RedirectResponse):
         return user_info
@@ -409,7 +410,7 @@ def walkin_page(request: Request):
         cursor.execute("""
             SELECT TOP 1 er.EligibilityId, im.InsuranceName, er.CreatedOn, 
                 CASE WHEN ers.ID IS NULL THEN 'Pending'
-                     WHEN ers.Is_Eligible = 1 THEN 'Eligible'
+                     WHEN ers.Is_Eligible = 'Eligible' THEN 'Eligible'
                      ELSE 'Not Eligible' END as Status
             FROM EligibilityRequest er
             LEFT JOIN EligibilityResponse ers ON er.EligibilityId = ers.EligibilityRequestID
@@ -427,8 +428,10 @@ def walkin_page(request: Request):
         "username": username,
         "user_role": user_role,
         "insurances": insurance_list,
-        "last_check": last_check
+        "last_check": last_check,
+        "message": message
     })
+
 
 
 @app.post("/walk-in")
@@ -440,6 +443,7 @@ async def walkin_submit(
     insurance_company: int = Form(...),   # InsuranceMaster.ID
     appointment_date: str = Form(...),    # from <input type="date">
 ):
+    # ✅ Get logged in user info
     user_info = get_current_user_info(request)
     if isinstance(user_info, RedirectResponse):
         return user_info
@@ -447,7 +451,7 @@ async def walkin_submit(
     username = user_info["username"]
     user_role = user_info["user_role"]
 
-    # Get client_id from Users table
+    # ✅ Get client_id from Users table
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT ID FROM Users WHERE Username = ?", (username,))
@@ -457,31 +461,43 @@ async def walkin_submit(
     if not client_id:
         return JSONResponse({"status": "error", "message": "Client not found"}, status_code=400)
 
-    # Format appointment datetime for Pydantic model (dd/MM/yyyy HH:mm)
+    # ✅ Format appointment datetime for Pydantic model (dd/MM/yyyy HH:mm)
     formatted_appt = datetime.strptime(appointment_date, "%Y-%m-%d").strftime("%d/%m/%Y %H:%M")
+
+    # ✅ Normalize inputs before validation
+    emirates_id_clean = emirates_id.replace("-", "").strip()
+    mobile_clean = mobile_no.lstrip("0").strip()
 
     form_data = {
         "ClinicDoctorId": clinician_id,
         "ClinicDoctorLicense": clinician_id,
-        "EmiratesId": emirates_id,
+        "EmiratesId": emirates_id_clean,
         "MobileCountryCode": "+971",
-        "MobileNumber": mobile_no,
+        "MobileNumber": mobile_clean,
         "ClinicLicense": "DEFAULT_LICENSE",
         "InsuranceCode": str(insurance_company),
         "ClientName": username,
         "AppointmentDateTime": formatted_appt,
     }
 
-    # Validate with Pydantic
+    # ✅ Validate with Pydantic
     try:
         validated = AppointmentRequest(**form_data)
     except ValidationError as e:
-        return JSONResponse({"status": "error", "errors": e.errors()}, status_code=400)
+        return JSONResponse(
+            content={"status": "error", "errors": e.errors()},
+            status_code=400
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"status": "error", "message": str(e)},
+            status_code=500
+        )
 
-    # Insert into EligibilityRequest
+    # ✅ Insert into EligibilityRequest
     eligibility_id = save_to_eligibility_request_table(validated.dict(), client_id, insurance_company)
 
-    # Get insurance credentials from ClientInsuranceConfiguration
+    # ✅ Get insurance credentials
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -496,19 +512,22 @@ async def walkin_submit(
 
     insurance_username, insurance_password = row
 
-    # Trigger Selenium Automation
+    # ✅ Trigger Selenium automation
     response = trigger_selenium_script(insurance_username, insurance_password, validated.dict())
 
-    # Save response
+    # ✅ Save response
     save_to_eligibility_response_table(response, eligibility_id)
 
-    return JSONResponse({
-        "status": "success",
-        "message": "Eligibility check completed",
-        "eligibility_id": eligibility_id,
-        "response": response
-    })
-
+    # return JSONResponse({
+    #     "status": "success",
+    #     "message": "Eligibility check completed",
+    #     "eligibility_id": eligibility_id,
+    #     "response": response
+    # })
+    return RedirectResponse(
+        url=f"/walk-in?message=Successfully+processed+eligibility+request",
+        status_code=303
+    )
 
 # -------------------- File Upload Route --------------------
 @app.post("/upload")

@@ -8,14 +8,32 @@
         <div class="card-header">
             Walk-in Eligibility Check
         </div>
+        {% if message %}
+            <div class="alert alert-success mt-3">
+                {{ message }}
+            </div>
+        {% endif %}
         <div class="card-body">
             <form id="walkin-eligibility-form" class="form-section" action="/walk-in" method="post">
 
                 <!-- Emirates ID -->
-                <div class="mb-3">
+                <!-- <div class="mb-3">
                     <label for="emirates_id" class="form-label">Emirates ID</label>
                     <input type="text" class="form-control" id="emirates_id" name="emirates_id" placeholder="Enter Emirates ID" required>
-                </div>
+                </div> -->
+                <div class="mb-3">
+                <label for="emirates_id" class="form-label">Emirates ID</label>
+                <input type="text" 
+                    class="form-control" 
+                    id="emirates_id" 
+                    name="emirates_id" 
+                    placeholder="Enter Emirates ID" 
+                    pattern="[0-9]*" 
+                    inputmode="numeric"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                    required>
+                <div class="form-text text-muted">Enter ID without (-) or any special characters</div>
+            </div>
 
                 <!-- Mobile No -->
                 <div class="mb-3">
@@ -26,7 +44,7 @@
                 <!-- Clinician ID -->
                 <div class="mb-3">
                     <label for="clinician_id" class="form-label">Clinician ID</label>
-                    <input type="text" class="form-control" id="clinician_id" name="clinician_id" placeholder="Enter Clinician ID" required>
+                    <input type="text" class="form-control" id="clinician_id" name="clinician_id" placeholder="Enter Clinician ID" >
                 </div>
 
                 <!-- Insurance Company (Select2) -->
