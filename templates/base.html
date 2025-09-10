@@ -94,6 +94,15 @@
             <i class="fas fa-robot"></i> <span>Data Source</span>
           </a>
         </li>
+
+        <li>
+          <a
+            href="/elig-results"
+            class="nav-link {% if request.url.path == '/elig-results' %}active{% endif %}"
+          >
+            <i class="fas fa-robot"></i> <span>Eligibility Results</span>
+          </a>
+        </li>
       </ul>
     </nav>
 
@@ -114,6 +123,7 @@
               id="userDropdown"
               data-bs-toggle="dropdown"
             >
+            
               <i class="fas fa-user-circle me-1"></i> {{ username }}
             </button>
             <ul class="dropdown-menu dropdown-menu-end">

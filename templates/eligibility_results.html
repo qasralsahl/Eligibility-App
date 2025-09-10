@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h3 class="mb-3">Eligibility Results</h3>
+  <div class="table-responsive">
+    <table id="eligResultsTable" class="table table-striped table-bordered nowrap" style="width:100%">
+      <thead>
+        <tr>
+          <th>Clinic Doctor ID</th>
+          <th>Doctor Name</th>
+          <th>License</th>
+          <th>Emirates ID</th>
+          <th>Member ID</th>
+          <th>Mobile Code</th>
+          <th>Mobile Number</th>
+          <th>Patient First Name</th>
+          <th>Patient Last Name</th>
+          <th>Clinic License</th>
+          <th>Insurance</th>
+          <th>Client</th>
+          <th>Department</th>
+          <th>Speciality</th>
+          <th>Appointment</th>
+          <th>CreatedOn</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in data %}
+        <tr>
+          <td>{{ row.ClinicDoctorId }}</td>
+          <td>{{ row.ClinicDoctorName }}</td>
+          <td>{{ row.ClinicDoctorLicense }}</td>
+          <td>{{ row.EmiratesId }}</td>
+          <td>{{ row.MemberId }}</td>
+          <td>{{ row.MobileCountryCode }}</td>
+          <td>{{ row.MobileNumber }}</td>
+          <td>{{ row.PatientFirstName }}</td>
+          <td>{{ row.PatientLastName }}</td>
+          <td>{{ row.ClinicLicense }}</td>
+          <td>{{ row.InsuranceCode }}</td>
+          <td>{{ row.ClientName }}</td>
+          <td>{{ row.DepartmentName }}</td>
+          <td>{{ row.SpecialityName }}</td>
+          <td>{{ row.AppointmentDateTime.strftime('%Y-%m-%d %H:%M') if row.AppointmentDateTime else '' }}</td>
+          <td>{{ row.CreatedOn.strftime('%Y-%m-%d %H:%M') if row.CreatedOn else '' }}</td>
+          
+          <td>
+            {% if row.Status == "Eligible" %}
+              <span class="badge bg-success">Eligible</span>
+            {% elif row.Status == "Not Eligible" %}
+              <span class="badge bg-danger">Not Eligible</span>
+            {% else %}
+              <span class="badge bg-secondary">Pending</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+           <a href="javascript:void(0);" 
+              class="btn btn-sm btn-warning recheck-btn" 
+              title="Recheck"
+              data-id="{{ row.EligibilityId }}"
+              data-insurance="{{ row.InsuranceCode }}"
+              data-appointment="{{ row.AppointmentDateTime.strftime('%Y-%m-%d') if row.AppointmentDateTime else '' }}">
+                <i class="fas fa-sync"></i>
+            </a>
+            <a href="/static/{{ row.EmiratesId }}.png" 
+              class="btn btn-sm btn-info" 
+              title="Download Image" 
+              download="{{ row.EmiratesId }}.png">
+                <i class="fas fa-download"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+
+<!-- Recheck Modal -->
+<div class="modal fade" id="recheckModal" tabindex="-1" aria-labelledby="recheckModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="recheckModalLabel">Recheck Eligibility</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="recheckForm">
+        <div class="modal-body">
+          <input type="hidden" id="eligibilityId" name="eligibility_id" />
+
+          <div class="mb-3">
+            <label for="insurance" class="form-label">Insurance Company</label>
+            <select id="insurance" name="insurance_company" class="form-control" style="width:100%;" required>
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label for="appointmentDate" class="form-label">Appointment Date</label>
+            <input type="date" id="appointmentDate" name="appointment_date" class="form-control" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">Recheck</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+
+
+<script>
+$(document).ready(function() {
+    // ✅ Initialise DataTable only once
+    let table = $('#eligResultsTable').DataTable({
+        scrollX: true,
+        scrollCollapse: true,
+        autoWidth: false,
+        responsive: false,
+        pageLength: 10,
+        lengthMenu: [10, 25, 50, 100],
+    });
+
+    // ✅ Initialize Select2 for insurance
+    $('#insurance').select2({
+        dropdownParent: $('#recheckModal'),
+        placeholder: "Select Insurance Company",
+        allowClear: true
+    });
+
+    // ✅ Open modal on Recheck button click
+    $('.recheck-btn').on('click', function() {
+        let eligibilityId = $(this).data('id');
+        let currentInsurance = $(this).data('insurance');
+        let appointmentDate = $(this).data('appointment');
+
+        // Set hidden input for eligibilityId
+        $('#eligibilityId').val(eligibilityId);
+
+        // Set appointment date if available
+        $('#appointmentDate').val(appointmentDate);
+
+        // Fetch insurance list dynamically
+        $.get(`/eligibility/recheck/${eligibilityId}`, function(response) {
+            $('#insurance').empty();
+            $.each(response.insurances, function(i, ins) {
+                $('#insurance').append(
+                    $('<option>', {
+                        value: ins.id,
+                        text: ins.name
+                    })
+                );
+            });
+
+            // ✅ Preselect current insurance if available
+            if (currentInsurance) {
+                $('#insurance').val(currentInsurance).trigger('change');
+            }
+
+            // Open modal
+            $('#recheckModal').modal('show');
+        });
+    });
+
+   // ✅ Submit Recheck Form
+$('#recheckForm').on('submit', function(e) {
+    e.preventDefault();
+
+    $.ajax({
+        url: "/eligibility/recheck",
+        type: "POST",
+        data: $(this).serialize(),
+        success: function(res) {
+            if (res.status === "success") {
+                $('#recheckModal').modal('hide');
+
+                // ✅ SweetAlert styled success
+                Swal.fire({
+                    title: "✅ Recheck Completed!",
+                    text: "Eligibility recheck was successful.",
+                    icon: "success",
+                    confirmButtonText: "Great!",
+                    confirmButtonColor: "#28a745"  // green button
+                }).then(() => {
+                    location.reload();
+                });
+
+            } else {
+                // ✅ SweetAlert error from server
+                Swal.fire({
+                    title: "❌ Error",
+                    text: res.message || "Something went wrong.",
+                    icon: "error",
+                    confirmButtonText: "Close",
+                    confirmButtonColor: "#d33" // red button
+                });
+            }
+        },
+        error: function(err) {
+            // ✅ SweetAlert error for AJAX failure
+            Swal.fire({
+                title: "⚠️ Request Failed",
+                text: "Unable to complete recheck. Please try again.",
+                icon: "error",
+                confirmButtonText: "Close",
+                confirmButtonColor: "#d33"
+            });
+        }
+    });
+});
+
+});
+</script>
+
+
+
+
+
+{% endblock %}
+

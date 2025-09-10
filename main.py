@@ -45,6 +45,7 @@ logging.basicConfig(
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/screenshots", StaticFiles(directory=os.path.join(BASE_DIR, "/screenshots")), name="screenshots")
 executor = ThreadPoolExecutor(max_workers=5)
 
 # Include modular routes
@@ -135,7 +136,7 @@ def get_patient_data(user_role: str, username: str):
                         WHEN ers.Is_Eligible = 'Eligible' THEN 'Eligible' 
                         ELSE 'Not Eligible' 
                     END as Status,
-                    er.CreatedOn as UploadedDate
+                    er.CreatedOn 
                 FROM EligibilityRequest er
                 LEFT JOIN EligibilityResponse ers ON er.EligibilityId = ers.EligibilityRequestID
                 JOIN Users u ON er.ClientID = u.ID
@@ -154,7 +155,7 @@ def get_patient_data(user_role: str, username: str):
                         WHEN ers.Is_Eligible = 'Eligible' THEN 'Eligible'
                         ELSE 'Not Eligible' 
                     END as Status,
-                    er.CreatedOn as UploadedDate
+                    er.CreatedOn 
                 FROM EligibilityRequest er
                 LEFT JOIN EligibilityResponse ers ON er.EligibilityId = ers.EligibilityRequestID
                 JOIN Users u ON er.ClientID = u.ID
@@ -401,11 +402,26 @@ def walkin_page(request: Request, message: str = None):
     username = user_info["username"]
     user_role = user_info["user_role"]
 
-    # fetch active insurance companies
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT ID, InsuranceCode, InsuranceName FROM InsuranceMaster WHERE IsActive = 1 ORDER BY InsuranceName")
-        insurances = cursor.fetchall()
+        if user_role == "SuperAdmin":
+            # Show all insurance companies
+            cursor.execute("SELECT ID, InsuranceCode, InsuranceName FROM InsuranceMaster WHERE IsActive = 1 ORDER BY InsuranceName")
+            insurances = cursor.fetchall()
+        else:
+            # Show only insurance companies configured for this client
+            cursor.execute("SELECT ID FROM Users WHERE Username = ?", (username,))
+            client_row = cursor.fetchone()
+            client_id = client_row[0] if client_row else None
+
+            cursor.execute("""
+                SELECT im.ID, im.InsuranceCode, im.InsuranceName
+                FROM InsuranceMaster im
+                JOIN ClientInsuranceConfiguration cic ON im.ID = cic.InsuranceID
+                WHERE cic.ClientID = ? AND cic.IsActive = 1 AND im.IsActive = 1
+                ORDER BY im.InsuranceName
+            """, (client_id,))
+            insurances = cursor.fetchall()
 
         # Get last eligibility check for this user (if any)
         cursor.execute("""
@@ -695,6 +711,173 @@ async def upload_file(
             "clients": get_clients(user_role, username),
             "upload_history": get_upload_history(user_role, username)
         })
+
+
+@app.get("/elig-results", response_class=HTMLResponse)
+async def eligibility_results(request: Request):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
+
+    user_role = user_info["user_role"]
+    username = user_info["username"]
+
+    # Get user_id from Users table if needed
+    user_id = None
+    if user_role == "Client":
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT ID FROM Users WHERE Username = ?", (username,))
+            row = cursor.fetchone()
+            user_id = row[0] if row else None
+
+    # Build query
+    base_query = """
+        SELECT
+            er.EligibilityId,
+            er.ClinicDoctorId,
+            er.ClinicDoctorName,
+            er.ClinicDoctorLicense,
+            er.EmiratesId,
+            er.MemberId,
+            er.MobileCountryCode,
+            er.MobileNumber,
+            er.PatientFirstName,
+            er.PatientLastName,
+            er.ClinicLicense,
+            im.InsuranceCode,
+            u.ClientName,
+            er.DepartmentName,
+            er.SpecialityName,
+            er.AppointmentDateTime,
+            er.CreatedOn,
+            ISNULL(resp.Is_Eligible, 'Pending') AS Status
+        FROM EligibilityRequest er
+        LEFT JOIN EligibilityResponse resp
+            ON er.EligibilityId = resp.EligibilityRequestID
+        INNER JOIN InsuranceMaster im
+            ON er.InsuranceID = im.ID
+        INNER JOIN Users u
+            ON er.ClientID = u.ID
+    """
+
+    params = ()
+    if user_role == "Client" and user_id:
+        base_query += " WHERE er.ClientID = ?"
+        params = (user_id,)
+
+    base_query += " ORDER BY er.CreatedOn DESC"
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(base_query, params)
+        rows = cursor.fetchall()
+
+    return templates.TemplateResponse("eligibility_results.html", {
+        "request": request,
+        "username": username,
+        "data": rows,
+        "user_role": user_role
+    })
+
+
+@app.get("/eligibility/recheck/{eligibility_id}")
+async def get_insurances_for_recheck(request: Request, eligibility_id: int):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
+
+    user_role = user_info["user_role"]
+    username = user_info["username"]
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        if user_role == "Client":
+            cursor.execute("SELECT ID FROM Users WHERE Username = ?", (username,))
+            client_row = cursor.fetchone()
+            client_id = client_row[0] if client_row else None
+
+            cursor.execute("""
+                SELECT im.ID, im.InsuranceCode
+                FROM ClientInsuranceConfiguration cic
+                INNER JOIN InsuranceMaster im ON cic.InsuranceID = im.ID
+                WHERE cic.ClientID = ? AND cic.IsActive = 1
+            """, (client_id,))
+        else:  # SuperAdmin → show all insurances
+            cursor.execute("SELECT ID, InsuranceCode FROM InsuranceMaster")
+
+        insurances = [{"id": row[0], "name": row[1]} for row in cursor.fetchall()]
+
+    return JSONResponse({"insurances": insurances})
+
+
+
+
+@app.post("/eligibility/recheck")
+async def recheck_eligibility(
+    request: Request,
+    eligibility_id: int = Form(...),
+    insurance_company: int = Form(...),
+    appointment_date: str = Form(...),
+):
+    user_info = get_current_user_info(request)
+    if isinstance(user_info, RedirectResponse):
+        return user_info
+
+    username = user_info["username"]
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get old record details
+        cursor.execute("SELECT * FROM EligibilityRequest WHERE EligibilityId = ?", (eligibility_id,))
+        old_row = cursor.fetchone()
+        if not old_row:
+            return JSONResponse({"status": "error", "message": "Original request not found"}, status_code=404)
+
+        # Build new request data
+        new_request = dict(old_row._asdict()) if hasattr(old_row, "_asdict") else dict(zip([col[0] for col in cursor.description], old_row))
+        # Convert appointment_date (from form) to SQL format
+        try:
+            formatted_appt = datetime.strptime(appointment_date, "%Y-%m-%d").strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return JSONResponse({"status": "error", "message": "Invalid appointment date format"}, status_code=400)
+        new_request["AppointmentDateTime"] = formatted_appt
+        new_request["InsuranceID"] = insurance_company
+
+        # Insert new request record
+        eligibility_id_new = save_to_eligibility_request_table(new_request, old_row.ClientID, insurance_company)
+
+        # Fetch insurance credentials
+        cursor.execute("""
+            SELECT Username, Password 
+            FROM ClientInsuranceConfiguration
+            WHERE ClientID = ? AND InsuranceID = ? AND IsActive = 1
+        """, (old_row.ClientID, insurance_company))
+        creds = cursor.fetchone()
+
+        if not creds:
+            return JSONResponse({"status": "error", "message": "No active credentials found"}, status_code=400)
+        # import pdb; pdb.set_trace()
+
+        # Prepare data for Selenium
+        required_data = {
+            "EmiratesId": new_request.get("EmiratesId"),
+            "MobileNumber": new_request.get("MobileNumber"),
+            "InsuranceCode":new_request.get("InsuranceID")
+        }
+        # Trigger Selenium
+        response = trigger_selenium_script(creds[0], creds[1], required_data)
+        # Save response
+        save_to_eligibility_response_table(response, eligibility_id_new)
+
+    return JSONResponse({
+        "status": "success",
+        "message": "Recheck completed",
+        "eligibility_id": eligibility_id_new
+    })
+
 
 # -------------------- Pydantic Model --------------------
 

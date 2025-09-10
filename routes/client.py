@@ -21,6 +21,7 @@ def client_list(request: Request):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT ID, ClientName, IsActive, CreatedOn FROM Users WHERE Role = 'Client'")
+
         clients = cursor.fetchall()
 
     return templates.TemplateResponse("client/list.html", {

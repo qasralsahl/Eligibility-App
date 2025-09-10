@@ -13,45 +13,70 @@ router = APIRouter(prefix="/registration")
 
 @router.get("/list")
 def list_registrations(request: Request):
-    user_info = get_current_user_info(request)  # ✅ Get username and role
+    user_info = get_current_user_info(request)
     if isinstance(user_info, RedirectResponse):
         return user_info
+
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-    SELECT 
-        cic.ID, 
-        u.ClientName, 
-        im.InsuranceName, 
-        cic.Username, 
-        cic.Password,
-        cic.IsActive, 
-        cic.ClientID, 
-        cic.InsuranceID, 
-        cic.ExpirationDate
-    FROM ClientInsuranceConfiguration cic
-    JOIN Users u ON cic.ClientID = u.ID
-    JOIN InsuranceMaster im ON cic.InsuranceID = im.ID
-    """)
+
+    if user_info["user_role"] == "SuperAdmin":
+        # Show all configurations
+        cursor.execute("""
+            SELECT 
+                cic.ID, 
+                u.ClientName, 
+                im.InsuranceName, 
+                cic.Username, 
+                cic.Password,
+                cic.IsActive, 
+                cic.ClientID, 
+                cic.InsuranceID, 
+                cic.ExpirationDate
+            FROM ClientInsuranceConfiguration cic
+            JOIN Users u ON cic.ClientID = u.ID
+            JOIN InsuranceMaster im ON cic.InsuranceID = im.ID
+        """)
+    else:
+        # Show only configurations for the logged-in client
+        cursor.execute("SELECT ID FROM Users WHERE Username = ?", (user_info["username"],))
+        client_row = cursor.fetchone()
+        client_id = client_row[0] if client_row else None
+
+        cursor.execute("""
+            SELECT 
+                cic.ID, 
+                u.ClientName, 
+                im.InsuranceName, 
+                cic.Username, 
+                cic.Password,
+                cic.IsActive, 
+                cic.ClientID, 
+                cic.InsuranceID, 
+                cic.ExpirationDate
+            FROM ClientInsuranceConfiguration cic
+            JOIN Users u ON cic.ClientID = u.ID
+            JOIN InsuranceMaster im ON cic.InsuranceID = im.ID
+            WHERE cic.ClientID = ?
+        """, (client_id,))
+
     registrations = cursor.fetchall()
-    
     cursor.execute("SELECT ID, ClientName FROM Users WHERE IsActive = 1 AND Role = 'Client'")
     clients = cursor.fetchall()
     cursor.execute("SELECT ID, InsuranceName FROM InsuranceMaster WHERE IsActive = 1")
     insurances = cursor.fetchall()
-    
     conn.close()
-    
+
     current_date = datetime.now().strftime("%Y-%m-%d")
-    
+
     return templates.TemplateResponse("registration/list.html", {
-        "request": request, 
+        "request": request,
         "registrations": registrations,
         "clients": clients,
         "insurances": insurances,
         "current_date": current_date,
-        "username": user_info["username"],       
-        "user_role": user_info["user_role"]      
+        "username": user_info["username"],
+        "user_role": user_info["user_role"]
     })
 
 @router.post("/create")
