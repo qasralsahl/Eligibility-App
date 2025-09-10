@@ -1,5 +1,6 @@
 import time
 import base64
+import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -143,10 +144,14 @@ class EligibilityChecker:
     
     def save_screenshot_and_pdf(self, eid):
         try:
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            screenshot_dir = os.path.join(BASE_DIR, "static")
+            os.makedirs(screenshot_dir, exist_ok=True)
             print("Saving screenshot and PDF...")
             self.driver.execute_script("window.scrollBy(0, 83);")
             time.sleep(0.5)
-            self.driver.save_screenshot(f"{eid}.png")
+            # self.driver.save_screenshot(f"screenshot_dir{eid}.png")
+            self.driver.save_screenshot(os.path.join(screenshot_dir, f"{eid}.png"))
             print(f"Screenshot saved for {eid}")
 
             self.driver.execute_script("window.scrollTo(0, 0);")

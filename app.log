@@ -313,3 +313,35 @@ Stacktrace:
 2025-09-09 22:32:25,330 [WARNING] Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001AE78640830>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')': /session/ae374b43b5cbce4b59c445f4a76b57ca/window
 2025-09-09 22:32:29,335 [WARNING] Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001AE785C3110>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')': /session/ae374b43b5cbce4b59c445f4a76b57ca/window
 2025-09-09 22:32:33,344 [WARNING] Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001AE785C3390>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')': /session/ae374b43b5cbce4b59c445f4a76b57ca/window
+2025-09-10 00:14:57,544 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 2 clients
+2025-09-10 14:06:06,714 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 3 clients
+2025-09-10 14:07:07,919 [INFO] get_clients - Role: Client, Username: testcompany, Found: 3 clients
+2025-09-10 14:19:13,809 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 14:19:31,538 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 14:20:34,606 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 14:49:59,253 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 3 clients
+2025-09-10 14:54:50,151 [INFO] get_clients - Role: Client, Username: testcompany, Found: 3 clients
+2025-09-10 14:56:47,221 [INFO] get_clients - Role: Client, Username: testcompany, Found: 3 clients
+2025-09-10 14:56:51,689 [INFO] get_clients - Role: Client, Username: testcompany, Found: 3 clients
+2025-09-10 15:12:29,459 [INFO] get_clients - Role: Client, Username: testcompany, Found: 3 clients
+2025-09-10 15:24:11,649 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 3 clients
+2025-09-10 15:25:25,922 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 3 clients
+2025-09-10 15:27:37,114 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 3 clients
+2025-09-10 16:22:42,473 [INFO] get_clients - Role: Client, Username: testcompany, Found: 3 clients
+2025-09-10 17:26:49,940 [INFO] get_clients - Role: SuperAdmin, Username: admin, Found: 3 clients
+2025-09-10 18:23:55,454 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 18:24:06,237 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 18:35:40,453 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 18:37:45,753 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 18:50:21,629 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 18:51:06,072 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 18:54:50,636 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 18:54:53,869 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 18:55:25,703 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 18:55:31,720 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 19:05:57,120 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 19:09:26,179 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 19:09:35,804 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 19:16:40,349 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 19:21:06,750 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
+2025-09-10 20:06:41,997 [INFO] get_clients - Role: Client, Username: zahra_clinics, Found: 3 clients
