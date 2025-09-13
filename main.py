@@ -1,3 +1,8 @@
+import asyncio
+
+if hasattr(asyncio, 'WindowsSelectorEventLoopPolicy'):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from fastapi import FastAPI, HTTPException, Request, Form, Depends, UploadFile, File
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -19,17 +24,19 @@ from typing import Optional
 
 # Local imports
 from database import get_connection
-from eligibility_checker import EligibilityChecker
+# from eligibility_checker import EligibilityChecker
 from routes import insurance
 from routes import client
 from routes import registration
 
 from config import SECRET_KEY, ALGORITHM 
-from utils.auth import get_user_info as get_current_user_info  
+from utils.auth import get_user_info as get_current_user_info 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+from automation.nextcare_checker import NextCareEligibilityChecker
+
 
 # -------------------- Logging Configuration --------------------
 logging.basicConfig(
@@ -164,7 +171,7 @@ def get_patient_data(user_role: str, username: str):
                 ORDER BY er.CreatedOn DESC
             """, (username,))
         return cursor.fetchall()
-    
+
 # -------------------- Authentication Routes --------------------
 @app.get("/")
 def root_redirect():
@@ -391,7 +398,7 @@ def datasource_page(request: Request):
     })
 
 
-#------------------- Walk-in Eligibility Check Route -------------------------
+# ------------------- Walk-in Eligibility Check Route -------------------------
 
 @app.get("/walk-in", response_class=HTMLResponse)
 def walkin_page(request: Request, message: str = None):
@@ -448,7 +455,6 @@ def walkin_page(request: Request, message: str = None):
         "last_check": last_check,
         "message": message
     })
-
 
 
 @app.post("/walk-in")
@@ -530,8 +536,8 @@ async def walkin_submit(
     insurance_username, insurance_password = row
 
     # ✅ Trigger Selenium automation
-    response = trigger_selenium_script(insurance_username, insurance_password, validated.dict())
-
+    response = await trigger_selenium_script(insurance_username, insurance_password, validated.dict())
+    import pdb; pdb.set_trace()
     # ✅ Save response
     if response.get("status") == "error":
         print("❌ Skipping save, error:", response["message"])
@@ -552,7 +558,7 @@ async def walkin_submit(
     #     "eligibility_id": eligibility_id,
     #     "response": response
     # })
-    
+
 
 # -------------------- File Upload Route --------------------
 @app.post("/upload")
@@ -812,8 +818,6 @@ async def get_insurances_for_recheck(request: Request, eligibility_id: int):
     return JSONResponse({"insurances": insurances})
 
 
-
-
 @app.post("/eligibility/recheck")
 async def recheck_eligibility(
     request: Request,
@@ -870,7 +874,7 @@ async def recheck_eligibility(
         # Trigger Selenium
         response = trigger_selenium_script(creds[0], creds[1], required_data)
         # Save response
-        save_to_eligibility_response_table(response, eligibility_id_new)
+        # save_to_eligibility_response_table(response, eligibility_id_new)
 
     return JSONResponse({
         "status": "success",
@@ -889,7 +893,7 @@ class AppointmentRequest(BaseModel):
     # MemberId: str
     MemberId: Optional[str] = None
     MobileCountryCode: str = "+971"
-    MobileNumber: str
+    MobileNumber: Optional[str] = None
     PatientFirstName: str = None
     PatientLastName: str = None
     ClinicLicense: str
@@ -922,11 +926,11 @@ class AppointmentRequest(BaseModel):
         return appointment_dt
 
 # -------------------- Utility Functions --------------------
-def trigger_selenium_script(username, password, data: dict):
+async  def trigger_selenium_script(username, password, data: dict):
     """Run Selenium eligibility checker"""
     eid = data["EmiratesId"]
     mobile_num = data["MobileNumber"]
-    
+
     service_network = data["InsuranceCode"]
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -943,9 +947,18 @@ def trigger_selenium_script(username, password, data: dict):
 
     # select InsuranceCode from InsuranceMaster where ID = ty
     # import pdb; pdb.set_trace()
-    checker = EligibilityChecker(username, password)
-    response = checker.run(eid, mobile_num, service_network)
-    return response
+    if service_network.lower() == "nextcare":
+        # import pdb; pdb.set_trace()
+        checker = NextCareEligibilityChecker(username, password)
+        response = await checker.run_async(eid)  # Pass only EmiratesId for now and await the result to be async
+        print({"eid": eid, "result": response})
+        import pdb; pdb.set_trace()
+        return response
+    else:
+        return {
+            "status": "skipped",
+            "message": f"Automation not implemented for {service_network}",
+        }
 
 def save_to_eligibility_request_table(data: dict, client_id: int, insurance_id: int) -> int:
     query = """
