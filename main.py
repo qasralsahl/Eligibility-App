@@ -628,9 +628,6 @@ async def walkin_submit(
     response = await trigger_selenium_script(
         insurance_username, insurance_password, validated.dict()
     )
-    import pdb
-
-    pdb.set_trace()
     # ✅ Save response
     # to store emirates id also in response table
 
@@ -642,9 +639,7 @@ async def walkin_submit(
             url=f"/walk-in?message=Error:+{response['message']}", status_code=303
         )
     else:
-        import pdb
 
-        pdb.set_trace()
         save_to_eligibility_response_table(response, eligibility_id)
         return RedirectResponse(
             url=f"/walk-in?message=Successfully+processed+eligibility+request",
@@ -1032,17 +1027,23 @@ async def recheck_eligibility(
             "InsuranceCode": new_request.get("InsuranceID"),
         }
         # Trigger Selenium
-        response = trigger_selenium_script(creds[0], creds[1], required_data)
+        response = await trigger_selenium_script(creds[0], creds[1], required_data)
         # Save response
-        # save_to_eligibility_response_table(response, eligibility_id_new)
+        response["Emirates_ID"] = new_request.get("EmiratesId")
 
-    return JSONResponse(
-        {
-            "status": "success",
-            "message": "Recheck completed",
-            "eligibility_id": eligibility_id_new,
-        }
-    )
+        if response.get("status") == "error":
+            return JSONResponse(
+                {"status": "error", "message": response["message"]}, status_code=400
+            )
+        else:   
+            save_to_eligibility_response_table(response, eligibility_id_new)
+            return JSONResponse(
+                {
+                    "status": "success",
+                    "message": "Recheck completed",
+                    "eligibility_id": eligibility_id_new,
+                }
+            )
 
 
 # -------------------- Pydantic Model --------------------
@@ -1122,9 +1123,7 @@ async def trigger_selenium_script(username, password, data: dict):
             eid
         )  # Pass only EmiratesId for now and await the result to be async
         # print({"eid": eid, "result": response})
-        import pdb
 
-        pdb.set_trace()
         return response
     else:
         return {
@@ -1173,9 +1172,7 @@ def save_to_eligibility_request_table(
 
 def save_to_eligibility_response_table(data: dict, eligibility_request_id: int):
     member_policy = data.get("Member_Policy_Details", {}) or {}
-    import pdb
 
-    pdb.set_trace()
 
     def fix_date(val):
         if val is None or val == "" or str(val).lower() in ["none", "n/a", "invalid"]:
