@@ -50,7 +50,7 @@ class NextCareEligibilityChecker:
 
     async def _check_eligibility(self, eid: str):
         try:
-            
+
             log("Navigating to Eligibility Checking page.")
             await self.page.locator('//*[@id="441240"]/a').click()
             await self.page.wait_for_load_state("networkidle")
@@ -82,7 +82,7 @@ class NextCareEligibilityChecker:
             status = result.strip() if result else "Unknown"
 
             log(f"Member Status: {status}")
-            return {"status": "success", "member_status": status}
+            return {"status": "success", "Is_Eligible": status}
         except Exception as e:
             error(f"Eligibility check failed: {e}")
             raise
@@ -106,6 +106,7 @@ class NextCareEligibilityChecker:
             await self._login()
             result = await self._check_eligibility(eid)
             await self._save_artifacts(eid)
+            # import pdb; pdb.set_trace()
             return result
         finally:
             if self.browser:
